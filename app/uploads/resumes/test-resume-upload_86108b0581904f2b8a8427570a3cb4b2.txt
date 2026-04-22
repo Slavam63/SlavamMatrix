@@ -1,2 +1,0 @@
-Test resume for Matrix Parser
-Python backend developer

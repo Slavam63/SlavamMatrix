@@ -9,3 +9,5 @@ __pycache__/
 logs/
 browser_profiles/
 *.log
+
+app/uploads/resumes/

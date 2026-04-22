@@ -1,8 +1,0 @@
-Иван Петров
-CEO
-Финансы
-Москва
-ivan.petrov@example.com
-Ожидаемый доход 650000 руб
-Ключевые навыки: finance, strategy, management, analytics
-Готов к удаленной работе
