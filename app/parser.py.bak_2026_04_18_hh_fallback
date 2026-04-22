@@ -1,0 +1,1240 @@
+import re
+from pathlib import Path
+ 
+from app.config import Config
+from app.hh_source import search_hh_vacancies
+from app.linkedin_source import search_linkedin_vacancies
+from app.search_agent import build_agent_plan
+import app
+from app.models import JobRequest, Vacancy
+ 
+ 
+ALLOWED_SOURCE_NAMES = {"hh", "mock", "linkedin", "manual", "all"}
+ 
+ 
+FINAL_HEAVY_NEGATIVE_TITLE_PATTERNS = [
+    r"\bгенеральный директор\b",
+    r"\bceo\b",
+    r"\bchief executive officer\b",
+    r"\bисполнительный директор\b",
+    r"\bcoo\b",
+    r"\bchief operating officer\b",
+    r"\bоперационный директор\b",
+    r"\bкоммерческий директор\b",
+    r"\bchief commercial officer\b",
+    r"\bcco\b",
+    r"\bдиректор по продажам\b",
+    r"\bдиректор по маркетингу\b",
+    r"\bcmo\b",
+    r"\bpr[- ]директор\b",
+    r"\bдиректор по pr\b",
+]
+ 
+ 
+FINAL_NOISE_TITLE_PATTERNS = [
+    r"\bпомощник\b",
+    r"\bassistant\b",
+    r"\bассистент\b",
+    r"\bличный помощник\b",
+    r"\bбизнес[- ]ассистент\b",
+    r"\bexecutive assistant\b",
+    r"\bрекрутер\b",
+    r"\bhr\b",
+    r"\bhrd\b",
+    r"\bподбор персонала\b",
+    r"\bменеджер по продажам\b",
+    r"\bруководитель отдела продаж\b",
+    r"\bsales\b",
+    r"\bмаркетолог\b",
+    r"\bмаркетинга\b",
+    r"\bproduct marketing\b",
+    r"\btrade marketing\b",
+    r"\bbrand manager\b",
+    r"\baccount manager\b",
+    r"\bоператор\b",
+    r"\bcall[- ]center\b",
+    r"\bглавный редактор\b",
+    r"\bредактор\b",
+    r"\bдиректор колледжа\b",
+    r"\bзаведующ(?:ий|ая)\b",
+    r"\bметодист\b",
+    r"\bобучени[ея]\b",
+    r"\bedtech\b",
+    r"\bвалидаци(?:я|и)\b",
+    r"\bсопровождени[ея]\b",
+]
+ 
+ 
+FINAL_SALES_MARKETING_CONTEXT_PATTERNS = [
+    r"\bпродаж[аи]\b",
+    r"\bsales\b",
+    r"\bмаркетинг\b",
+    r"\bmarketing\b",
+    r"\bbrand\b",
+    r"\blead generation\b",
+    r"\bлидогенерац",
+    r"\bperformance marketing\b",
+    r"\bcac\b",
+    r"\bltv\b",
+    r"\bcrm[- ]коммуникац",
+    r"\bкоммерческ",
+    r"\bcommercial\b",
+    r"\bлизинг\b",
+    r"\bleasing\b",
+    r"\bпресейл\b",
+    r"\bpresale\b",
+    r"\bb2b[- ]продаж\b",
+]
+ 
+ 
+FINAL_EDTECH_CONTEXT_PATTERNS = [
+    r"\bedtech\b",
+    r"\bобразовательн",
+    r"\bобучени[ея]\b",
+    r"\bученик",
+    r"\bучебн",
+    r"\bобразовательные программы\b",
+]
+ 
+ 
+FINAL_PRODUCT_TITLE_PATTERNS = [
+    r"\bруководитель цифровых продуктов\b",
+    r"\bруководитель цифрового продукта\b",
+    r"\bруководитель продукта\b",
+    r"\bруководитель по продуктам\b",
+    r"\bдиректор по продукту\b",
+    r"\bhead of product\b",
+    r"\bproduct lead\b",
+    r"\bchief product officer\b",
+    r"\bproduct manager\b",
+    r"\bproduct owner\b",
+    r"\bвладелец продукта\b",
+    r"\bменеджер продукта\b",
+]
+ 
+ 
+FINAL_TRANSFORMATION_TITLE_PATTERNS = [
+    r"\bдиректор по цифровой трансформации\b",
+    r"\bруководитель по цифровой трансформации\b",
+    r"\bруководитель цифровой трансформации\b",
+    r"\bруководитель отдела цифровой трансформации\b",
+    r"\bhead of digital transformation\b",
+    r"\bcdto\b",
+    r"\bcdo\b",
+]
+ 
+ 
+FINAL_INNOVATION_TITLE_PATTERNS = [
+    r"\bдиректор по инновациям\b",
+    r"\bруководитель направления инноваций\b",
+    r"\bруководитель лаборатории инноваций\b",
+    r"\bруководитель центра инноваций\b",
+    r"\bhead of innovation\b",
+    r"\binnovation lead\b",
+]
+ 
+ 
+FINAL_PROJECT_TITLE_PATTERNS = [
+    r"\bруководитель проекта\b",
+    r"\bруководитель проектов\b",
+    r"\bруководитель крупных цифровых проектов\b",
+    r"\bproject manager\b",
+    r"\bprogram manager\b",
+    r"\bpmo\b",
+]
+ 
+ 
+FINAL_DIGITAL_CONTEXT_PATTERNS = [
+    r"\bцифров",
+    r"\bdigital\b",
+    r"\bai\b",
+    r"\bml\b",
+    r"\bllm\b",
+    r"\binnovation\b",
+    r"\bинновац",
+    r"\bproduct\b",
+    r"\bпродукт",
+    r"\bcustomer journey\b",
+    r"\bcx\b",
+    r"\bux\b",
+    r"\bmvp\b",
+    r"\bportfolio\b",
+    r"\broadmap\b",
+    r"\bdigital services?\b",
+    r"\bцифров(?:ые|ой)? сервис",
+    r"\btransformation\b",
+    r"\bтрансформац",
+    r"\bservice design\b",
+    r"\bproduct portfolio\b",
+    r"\bdelivery\b",
+]
+ 
+ 
+FINAL_TRAVEL_CONTEXT_PATTERNS = [
+    r"\btravel\b",
+    r"\bhospitality\b",
+    r"\bтуризм\b",
+    r"\bгостеприим",
+    r"\btrip\b",
+    r"\bcustomer journey\b",
+    r"\bcx\b",
+    r"\bотел",
+    r"\bhotel\b",
+]
+ 
+ 
+FINAL_PRODUCT_CONTEXT_PATTERNS = [
+    r"\bproduct\b",
+    r"\bproduct owner\b",
+    r"\bproduct manager\b",
+    r"\bhead of product\b",
+    r"\bпродукт",
+    r"\bmvp\b",
+    r"\broadmap\b",
+    r"\bbacklog\b",
+    r"\bportfolio\b",
+    r"\bproduct vision\b",
+]
+ 
+ 
+FINAL_TRANSFORMATION_CONTEXT_PATTERNS = [
+    r"\bцифров",
+    r"\bdigital transformation\b",
+    r"\btransformation\b",
+    r"\bcdto\b",
+    r"\bcdo\b",
+    r"\bchange management\b",
+    r"\bцифровая трансформация\b",
+]
+ 
+ 
+FINAL_INNOVATION_CONTEXT_PATTERNS = [
+    r"\binnovation\b",
+    r"\bинновац",
+    r"\bлаборатор",
+    r"\bакселератор",
+    r"\bstartup\b",
+    r"\bстартап",
+    r"\bportfolio\b",
+    r"\bmvp\b",
+]
+ 
+ 
+FINAL_CX_CONTEXT_PATTERNS = [
+    r"\bcustomer journey\b",
+    r"\bcustomer experience\b",
+    r"\bcx\b",
+    r"\bclient experience\b",
+    r"\bservice design\b",
+]
+ 
+ 
+COMMERCIAL_EXECUTIVE_TITLE_PATTERNS = [
+    r"\bкоммерческий директор\b",
+    r"\bchief commercial officer\b",
+    r"\bcco\b",
+    r"\bcommercial director\b",
+    r"\bдиректор по продажам\b",
+    r"\bsales director\b",
+    r"\bhead of sales\b",
+    r"\bдиректор по развитию бизнеса\b",
+    r"\bbusiness development director\b",
+    r"\bhead of business development\b",
+    r"\benterprise sales director\b",
+    r"\benterprise sales lead\b",
+    r"\bchannel sales director\b",
+    r"\bpartner sales director\b",
+    r"\bregional sales director\b",
+]
+ 
+ 
+COMMERCIAL_ENTERPRISE_CONTEXT_PATTERNS = [
+    r"\benterprise\b",
+    r"\benterprise sales\b",
+    r"\benterprise software\b",
+    r"\bsoftware\b",
+    r"\bsaas\b",
+    r"\bcloud\b",
+    r"\bcloud solutions\b",
+    r"\bit solutions\b",
+    r"\binformation security\b",
+    r"\bsecurity\b",
+    r"\bcybersecurity\b",
+    r"\bvendor\b",
+    r"\bchannel\b",
+    r"\bpartner sales\b",
+    r"\bpartner network\b",
+    r"\bканальн",
+    r"\bпартнерск",
+    r"\bвендор",
+    r"\boracle\b",
+    r"\bibm\b",
+    r"\bveritas\b",
+    r"\bмойофис\b",
+    r"\bmyoffice\b",
+    r"\bcrm\b",
+    r"\berp\b",
+    r"\binfrastructure\b",
+    r"\bb2b\b",
+    r"\bkey account\b",
+]
+ 
+ 
+COMMERCIAL_NEGATIVE_TITLE_PATTERNS = [
+    r"\bменеджер по продажам\b",
+    r"\bsales manager\b",
+    r"\baccount manager\b",
+    r"\bменеджер по работе с клиентами\b",
+    r"\bcustomer success\b",
+    r"\bretail\b",
+    r"\bрозниц",
+    r"\bкассир\b",
+    r"\bпродавец\b",
+    r"\bshop\b",
+    r"\bstore\b",
+    r"\bcall[- ]center\b",
+    r"\bоператор\b",
+    r"\bтелемаркет",
+]
+ 
+ 
+def _normalize_keywords(keywords_value):
+    if not keywords_value:
+        return []
+ 
+    if isinstance(keywords_value, list):
+        return [str(item).strip() for item in keywords_value if str(item).strip()]
+ 
+    return [
+        item.strip()
+        for item in str(keywords_value).split(",")
+        if item.strip()
+    ]
+ 
+ 
+def _normalize_text(value):
+    if not value:
+        return ""
+ 
+    text = str(value).lower().strip()
+    text = re.sub(r"\s+", " ", text)
+    return text
+ 
+ 
+def _normalize_url(value):
+    if not value:
+        return ""
+ 
+    text = str(value).strip()
+    text = re.sub(r"#.*$", "", text)
+    text = re.sub(r"\?.*$", "", text)
+    return text.rstrip("/").lower()
+ 
+ 
+def _clean_match_text(value):
+    if not value:
+        return ""
+ 
+    text = str(value).lower()
+    text = text.replace("c++", "cpp")
+    text = text.replace("node. js", "node.js")
+    text = text.replace("node js", "nodejs")
+    text = re.sub(r"[^\w\s\.\-\+#/]", " ", text, flags=re.UNICODE)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+ 
+ 
+def _matches_any_pattern(text: str, patterns):
+    return any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in patterns)
+ 
+ 
+def _count_pattern_matches(text: str, patterns):
+    count = 0
+    for pattern in patterns:
+        if re.search(pattern, text, flags=re.IGNORECASE):
+            count += 1
+    return count
+ 
+ 
+def _build_vacancy_dedup_key(item: dict):
+    source = _normalize_text(item.get("source") or "unknown")
+    external_id = _normalize_text(item.get("external_id"))
+ 
+    if external_id:
+        return f"external::{source}::{external_id}"
+ 
+    title = _normalize_text(item.get("title"))
+    company = _normalize_text(item.get("company"))
+    url = _normalize_url(item.get("url"))
+ 
+    return f"fallback::{source}::{title}::{company}::{url}"
+ 
+ 
+def _deduplicate_vacancies(vacancies):
+    result = []
+    seen_keys = set()
+ 
+    for item in vacancies:
+        dedup_key = _build_vacancy_dedup_key(item)
+ 
+        if dedup_key in seen_keys:
+            continue
+ 
+        seen_keys.add(dedup_key)
+        result.append(item)
+ 
+    return result
+ 
+ 
+def _get_enabled_sources():
+    sources = []
+ 
+    for source_name in Config.PARSER_DEFAULT_SOURCES:
+        if source_name == "mock" and Config.ENABLE_MOCK_SOURCE:
+            sources.append("mock")
+        elif source_name == "hh" and Config.ENABLE_HH_SOURCE:
+            sources.append("hh")
+        elif source_name == "linkedin":
+            sources.append("linkedin")
+        elif source_name == "manual":
+            sources.append("manual")
+ 
+    return sources
+ 
+ 
+def _build_agent_context_form_data(job_request: JobRequest):
+    return {
+        "email": job_request.user.email if job_request.user else "",
+        "query_text": job_request.query_text or "",
+        "position": job_request.position or "",
+        "keywords": job_request.keywords or "",
+        "location": job_request.location or "",
+        "salary_min": str(job_request.salary_min) if job_request.salary_min is not None else "",
+        "salary_max": str(job_request.salary_max) if job_request.salary_max is not None else "",
+        "employment_type": job_request.employment_type or "",
+        "work_format": job_request.work_format or "",
+        "remote": bool(job_request.remote),
+    }
+ 
+ 
+def _extract_resume_text_for_agent(job_request: JobRequest) -> str:
+    raw_path = (job_request.resume_file_path or "").strip()
+    raw_name = (job_request.resume_file_name or "").strip()
+ 
+    if not raw_path and not raw_name:
+        return ""
+ 
+    app_dir = Path(app.__file__).resolve().parent
+    project_dir = app_dir.parent
+ 
+    candidate_paths = []
+ 
+    if raw_path:
+        path_obj = Path(raw_path)
+        if path_obj.is_absolute():
+            candidate_paths.append(path_obj)
+        else:
+            cleaned_relative = raw_path.lstrip("./")
+            candidate_paths.append(project_dir / cleaned_relative)
+            candidate_paths.append(app_dir / cleaned_relative)
+ 
+    if raw_name:
+        candidate_paths.append(app_dir / "uploads" / "resumes" / raw_name)
+ 
+    seen = set()
+    resolved_candidates = []
+    for item in candidate_paths:
+        normalized = str(item)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        resolved_candidates.append(item)
+ 
+    file_path = next((path for path in resolved_candidates if path.exists() and path.is_file()), None)
+    if not file_path:
+        return ""
+ 
+    try:
+        from app.routes import _extract_resume_text, _clean_resume_text
+ 
+        resume_text = _extract_resume_text(file_path)
+        return _clean_resume_text(resume_text)
+    except Exception:
+        return ""
+ 
+ 
+def _sanitize_source_priority(source_priority):
+    cleaned = []
+    seen = set()
+ 
+    for item in source_priority or []:
+        value = _normalize_text(item)
+        if not value:
+            continue
+        if value not in ALLOWED_SOURCE_NAMES:
+            continue
+        if value in seen:
+            continue
+        seen.add(value)
+        cleaned.append(value)
+ 
+    return cleaned
+ 
+ 
+def _sanitize_query_text(primary_query: str, profile: dict, strategy: dict, job_request: JobRequest):
+    position = (profile.get("primary_role") or job_request.position or "").strip()
+    industry = (profile.get("industry") or "").strip()
+    location = (profile.get("location") or job_request.location or "").strip()
+    keywords = strategy.get("keyword_variants") or []
+    keywords = [str(x).strip() for x in keywords if str(x).strip()][:3]
+ 
+    parts = []
+    if position:
+        parts.append(position)
+    if industry and industry.lower() != position.lower():
+        parts.append(industry)
+    if location:
+        parts.append(location)
+    if keywords:
+        parts.append(", ".join(keywords))
+ 
+    compact = " | ".join(parts).strip()
+    if compact:
+        return compact
+ 
+    return (primary_query or job_request.query_text or "").strip()
+ 
+ 
+def _sanitize_scenarios(scenarios):
+    cleaned = []
+    seen = set()
+ 
+    for item in scenarios or []:
+        if not isinstance(item, dict):
+            continue
+ 
+        name = str(item.get("name") or "").strip()
+        role = str(item.get("role") or "").strip()
+        industry = str(item.get("industry") or "").strip()
+        query = str(item.get("query") or "").strip()
+        keywords = item.get("keywords") or []
+ 
+        if not role or not query:
+            continue
+ 
+        key = f"{role.lower()}::{industry.lower()}::{query.lower()}"
+        if key in seen:
+            continue
+        seen.add(key)
+ 
+        cleaned.append(
+            {
+                "name": name,
+                "role": role,
+                "industry": industry,
+                "query": query,
+                "keywords": [str(x).strip() for x in keywords if str(x).strip()][:6],
+            }
+        )
+ 
+    return cleaned[:8]
+ 
+ 
+def _apply_management_guardrails(payload: dict, plan: dict) -> tuple[dict, dict]:
+    management = plan.get("management") or {}
+    risk_level = str(management.get("risk_level") or "").strip().lower()
+ 
+    payload = dict(payload)
+    plan = dict(plan)
+ 
+    payload["management"] = management
+ 
+    if risk_level == "high":
+        scenarios = payload.get("scenarios") or []
+        if scenarios:
+            payload["scenarios"] = scenarios[:1]
+ 
+        query_variants = payload.get("query_variants") or []
+        if query_variants:
+            payload["query_variants"] = query_variants[:1]
+ 
+        source_priority = payload.get("source_priority") or []
+        if "hh" in source_priority:
+            payload["source_priority"] = ["hh"]
+        elif source_priority:
+            payload["source_priority"] = source_priority[:1]
+        else:
+            payload["source_priority"] = ["hh"]
+ 
+        diagnostics = dict(payload.get("diagnostics") or {})
+        recommendations = list(diagnostics.get("recommendations") or [])
+        guardrail_note = "Включён безопасный режим: только primary-сценарий и базовый источник поиска."
+        if guardrail_note not in recommendations:
+            recommendations.append(guardrail_note)
+        diagnostics["recommendations"] = recommendations[:10]
+        payload["diagnostics"] = diagnostics
+ 
+    diagnostics = dict(payload.get("diagnostics") or {})
+    diagnostics["guardrails_applied"] = (risk_level == "high")
+    diagnostics["effective_scenarios_count"] = len(payload.get("scenarios") or [])
+    diagnostics["effective_query_variants_count"] = len(payload.get("query_variants") or [])
+    diagnostics["effective_source_priority_count"] = len(payload.get("source_priority") or [])
+    payload["diagnostics"] = diagnostics
+ 
+    return payload, plan
+ 
+ 
+def _build_agent_payload(job_request: JobRequest):
+    form_data = _build_agent_context_form_data(job_request)
+    resume_text = _extract_resume_text_for_agent(job_request)
+    plan = build_agent_plan(
+        resume_text=resume_text,
+        form_data=form_data,
+        job_request=job_request,
+    )
+ 
+    profile = plan.get("profile", {})
+    strategy = plan.get("strategy", {})
+    diagnostics = plan.get("diagnostics", {})
+    management = plan.get("management", {})
+ 
+    role_variants = strategy.get("role_variants") or []
+    industry_variants = strategy.get("industry_variants") or []
+    keyword_variants = strategy.get("keyword_variants") or []
+    query_variants = strategy.get("query_variants") or []
+    source_priority = _sanitize_source_priority(strategy.get("source_priority") or [])
+    scenarios = _sanitize_scenarios(strategy.get("scenarios") or [])
+ 
+    primary_query = _sanitize_query_text(
+        primary_query=strategy.get("primary_query") or "",
+        profile=profile,
+        strategy=strategy,
+        job_request=job_request,
+    )
+ 
+    payload = {
+        "job_request_id": job_request.id,
+        "query_text": primary_query,
+        "position": profile.get("primary_role") or job_request.position,
+        "keywords": keyword_variants or _normalize_keywords(job_request.keywords),
+        "location": profile.get("location") or job_request.location,
+        "salary_min": float(job_request.salary_min) if job_request.salary_min is not None else None,
+        "salary_max": float(job_request.salary_max) if job_request.salary_max is not None else None,
+        "employment_type": job_request.employment_type,
+        "remote": bool(job_request.remote),
+        "work_format": job_request.work_format,
+        "role_variants": role_variants,
+        "industry_variants": industry_variants,
+        "query_variants": query_variants,
+        "source_priority": source_priority,
+        "scenarios": scenarios,
+        "agent_profile": profile,
+        "agent_strategy": strategy,
+        "diagnostics": diagnostics,
+        "management": management,
+    }
+ 
+    payload, plan = _apply_management_guardrails(payload, plan)
+    return payload, plan
+ 
+ 
+def build_search_payload(job_request_id: int):
+    db = app.db_session
+ 
+    job_request = (
+        db.query(JobRequest)
+        .filter(JobRequest.id == job_request_id)
+        .first()
+    )
+    if not job_request:
+        raise ValueError("job request not found")
+ 
+    payload, _plan = _build_agent_payload(job_request)
+    return payload
+ 
+ 
+def _run_mock_source(payload):
+    position = payload.get("position") or "Specialist"
+    location = payload.get("location") or "Remote"
+ 
+    return [
+        {
+            "source": "mock",
+            "external_id": f"mock-{payload['job_request_id']}-1",
+            "title": position,
+            "company": "Matrix Test Company",
+            "location": location,
+            "salary": None,
+            "url": f"https://example.com/vacancies/mock-{payload['job_request_id']}-1",
+            "description": f"Mock vacancy generated for job_request_id={payload['job_request_id']}",
+            "employment_type": payload.get("employment_type"),
+            "remote": payload.get("remote"),
+            "scenario_name": "mock_primary",
+        }
+    ]
+ 
+def _run_manual_source(payload: dict):
+    db = app.db_session
+ 
+    rows = (
+        db.query(Vacancy)
+        .filter(Vacancy.job_request_id == payload["job_request_id"])
+        .order_by(Vacancy.id.desc())
+        .all()
+    )
+ 
+    result = []
+ 
+    for item in rows:
+        result.append(
+            {
+                "source": item.source or "manual",
+                "external_id": item.external_id,
+                "title": item.title or "Untitled vacancy",
+                "company": item.company,
+                "location": item.location,
+                "salary": item.salary,
+                "url": item.url or "",
+                "description": item.description,
+                "employment_type": item.employment_type,
+                "remote": bool(item.remote),
+                "ai_score": float(item.ai_score) if item.ai_score is not None else 0.0,
+                "scenario_name": "manual_input",
+            }
+        )
+ 
+    return result
+ 
+ 
+def _reorder_sources(enabled_sources, preferred_sources):
+    if not preferred_sources:
+        return enabled_sources
+ 
+    ordered = []
+    for source in preferred_sources:
+        if source in enabled_sources and source not in ordered:
+            ordered.append(source)
+ 
+    for source in enabled_sources:
+        if source not in ordered:
+            ordered.append(source)
+ 
+    return ordered
+ 
+ 
+def _build_payload_for_scenario(payload: dict, scenario: dict) -> dict:
+    scenario_keywords = scenario.get("keywords") or payload.get("keywords") or []
+    scenario_industry = scenario.get("industry") or ""
+    scenario_query = scenario.get("query") or payload.get("query_text") or ""
+ 
+    scenario_payload = dict(payload)
+    scenario_payload["position"] = scenario.get("role") or payload.get("position")
+    scenario_payload["query_text"] = scenario_query
+    scenario_payload["keywords"] = scenario_keywords
+    scenario_payload["industry_variants"] = [scenario_industry] if scenario_industry else payload.get("industry_variants") or []
+    scenario_payload["query_variants"] = [scenario_query] if scenario_query else payload.get("query_variants") or []
+    scenario_payload["scenario_name"] = scenario.get("name") or "scenario"
+ 
+    return scenario_payload
+ 
+ 
+def _run_hh_with_scenarios(payload: dict):
+    scenarios = payload.get("scenarios") or []
+    if not scenarios:
+        return search_hh_vacancies(payload)
+ 
+    all_vacancies = []
+ 
+    for scenario in scenarios:
+        scenario_payload = _build_payload_for_scenario(payload, scenario)
+        scenario_vacancies = search_hh_vacancies(scenario_payload)
+ 
+        for vacancy in scenario_vacancies:
+            if not vacancy.get("scenario_name"):
+                vacancy["scenario_name"] = scenario_payload.get("scenario_name")
+            all_vacancies.append(vacancy)
+ 
+    return all_vacancies
+ 
+ 
+def _run_linkedin_with_scenarios(payload: dict):
+    scenarios = payload.get("scenarios") or []
+    if not scenarios:
+        return search_linkedin_vacancies(payload)
+ 
+    all_vacancies = []
+ 
+    for scenario in scenarios:
+        scenario_payload = _build_payload_for_scenario(payload, scenario)
+        scenario_vacancies = search_linkedin_vacancies(scenario_payload)
+ 
+        for vacancy in scenario_vacancies:
+            if not vacancy.get("scenario_name"):
+                vacancy["scenario_name"] = scenario_payload.get("scenario_name")
+            all_vacancies.append(vacancy)
+ 
+    return all_vacancies
+ 
+ 
+def _get_product_domain(payload: dict) -> str:
+    profile = payload.get("agent_profile") or {}
+    return str(profile.get("product_domain") or "").strip().lower()
+ 
+ 
+def _score_commercial_it_enterprise_vacancy(payload: dict, vacancy: dict):
+    title = vacancy.get("title") or ""
+    description = vacancy.get("description") or ""
+    scenario_name = vacancy.get("scenario_name") or ""
+    base_ai_score = float(vacancy.get("ai_score") or 0)
+ 
+    title_text = _clean_match_text(title)
+    description_text = _clean_match_text(description)
+    combined_text = _clean_match_text(" ".join([title, description]))
+    scenario_text = _clean_match_text(scenario_name)
+ 
+    score = max(base_ai_score, 35.0)
+ 
+    has_exec_title = _matches_any_pattern(title_text, COMMERCIAL_EXECUTIVE_TITLE_PATTERNS)
+    has_enterprise_context = _matches_any_pattern(combined_text, COMMERCIAL_ENTERPRISE_CONTEXT_PATTERNS)
+    has_negative_title = _matches_any_pattern(title_text, COMMERCIAL_NEGATIVE_TITLE_PATTERNS)
+ 
+    if has_exec_title:
+        score += 22
+ 
+    if has_enterprise_context:
+        score += 4 * _count_pattern_matches(combined_text, COMMERCIAL_ENTERPRISE_CONTEXT_PATTERNS)
+ 
+    if "commercial director" in title_text or "коммерческий директор" in title_text:
+        score += 10
+    if "sales director" in title_text or "директор по продажам" in title_text:
+        score += 10
+    if "business development director" in title_text or "директор по развитию бизнеса" in title_text:
+        score += 10
+    if "enterprise sales" in combined_text:
+        score += 8
+    if "channel sales" in combined_text or "канальн" in combined_text:
+        score += 8
+    if "partner sales" in combined_text or "партнерск" in combined_text:
+        score += 8
+    if "vendor" in combined_text or "вендор" in combined_text:
+        score += 7
+    if "cloud" in combined_text or "saas" in combined_text or "software" in combined_text:
+        score += 6
+    if "information security" in combined_text or "security" in combined_text:
+        score += 5
+    if "oracle" in combined_text or "ibm" in combined_text or "veritas" in combined_text or "myoffice" in combined_text or "мойофис" in combined_text:
+        score += 6
+    if "b2b" in combined_text:
+        score += 5
+    if "key account" in combined_text:
+        score += 4
+ 
+    if has_negative_title:
+        score -= 24
+ 
+    if "marketing" in title_text or "маркетинг" in title_text:
+        score -= 20
+    if "retail" in combined_text or "розниц" in combined_text:
+        score -= 18
+    if "account manager" in title_text:
+        score -= 16
+    if "sales manager" in title_text or "менеджер по продажам" in title_text:
+        score -= 18
+    if "customer success" in title_text:
+        score -= 14
+    if "assistant" in title_text or "ассистент" in title_text:
+        score -= 20
+ 
+    position = _clean_match_text(payload.get("position") or "")
+    if position:
+        if position in title_text:
+            score += 12
+        else:
+            matched_tokens = sum(
+                1 for token in position.split()
+                if len(token) > 3 and token in title_text
+            )
+            score += min(matched_tokens * 3, 9)
+ 
+    for keyword in _normalize_keywords(payload.get("keywords") or [])[:8]:
+        keyword_text = _clean_match_text(keyword)
+        if not keyword_text or len(keyword_text) < 2:
+            continue
+ 
+        if keyword_text in title_text:
+            score += 4
+        elif keyword_text in description_text:
+            score += 1.5
+ 
+    if "cloud" in scenario_text or "saas" in scenario_text:
+        if "cloud" in combined_text or "saas" in combined_text or "software" in combined_text:
+            score += 8
+        else:
+            score -= 5
+ 
+    if "security" in scenario_text or "vendor" in scenario_text:
+        if "security" in combined_text or "vendor" in combined_text or "вендор" in combined_text:
+            score += 8
+        else:
+            score -= 5
+ 
+    if "enterprise" in scenario_text:
+        if has_enterprise_context:
+            score += 7
+        else:
+            score -= 5
+ 
+    if not has_exec_title and not has_enterprise_context:
+        score -= 14
+ 
+    if score < 1:
+        score = 1.0
+    if score > 100:
+        score = 100.0
+ 
+    return float(score)
+ 
+ 
+def _score_default_vacancy(payload: dict, vacancy: dict):
+    title = vacancy.get("title") or ""
+    description = vacancy.get("description") or ""
+    scenario_name = vacancy.get("scenario_name") or ""
+    base_ai_score = float(vacancy.get("ai_score") or 0)
+ 
+    title_text = _clean_match_text(title)
+    description_text = _clean_match_text(description)
+    combined_text = _clean_match_text(" ".join([title, description]))
+    scenario_text = _clean_match_text(scenario_name)
+ 
+    score = base_ai_score
+ 
+    heavy_negative_title = _matches_any_pattern(title_text, FINAL_HEAVY_NEGATIVE_TITLE_PATTERNS)
+    noise_title = _matches_any_pattern(title_text, FINAL_NOISE_TITLE_PATTERNS)
+ 
+    strong_product_title = _matches_any_pattern(title_text, FINAL_PRODUCT_TITLE_PATTERNS)
+    strong_transformation_title = _matches_any_pattern(title_text, FINAL_TRANSFORMATION_TITLE_PATTERNS)
+    strong_innovation_title = _matches_any_pattern(title_text, FINAL_INNOVATION_TITLE_PATTERNS)
+    strong_project_title = _matches_any_pattern(title_text, FINAL_PROJECT_TITLE_PATTERNS)
+ 
+    has_strong_positive_title = any(
+        [
+            strong_product_title,
+            strong_transformation_title,
+            strong_innovation_title,
+            strong_project_title,
+        ]
+    )
+ 
+    has_sales_marketing_context = _matches_any_pattern(combined_text, FINAL_SALES_MARKETING_CONTEXT_PATTERNS)
+    has_edtech_context = _matches_any_pattern(combined_text, FINAL_EDTECH_CONTEXT_PATTERNS)
+    has_digital_context = _matches_any_pattern(combined_text, FINAL_DIGITAL_CONTEXT_PATTERNS)
+    has_product_context = _matches_any_pattern(combined_text, FINAL_PRODUCT_CONTEXT_PATTERNS)
+    has_transformation_context = _matches_any_pattern(combined_text, FINAL_TRANSFORMATION_CONTEXT_PATTERNS)
+    has_innovation_context = _matches_any_pattern(combined_text, FINAL_INNOVATION_CONTEXT_PATTERNS)
+    has_cx_context = _matches_any_pattern(combined_text, FINAL_CX_CONTEXT_PATTERNS)
+    has_travel_context = _matches_any_pattern(combined_text, FINAL_TRAVEL_CONTEXT_PATTERNS)
+ 
+    if heavy_negative_title and not has_strong_positive_title:
+        score -= 34
+ 
+    if noise_title and not has_strong_positive_title:
+        score -= 26
+ 
+    if strong_product_title:
+        score += 18
+ 
+    if strong_transformation_title:
+        score += 20
+ 
+    if strong_innovation_title:
+        score += 18
+ 
+    if strong_project_title:
+        score += 6
+ 
+    score += 2 * _count_pattern_matches(combined_text, FINAL_DIGITAL_CONTEXT_PATTERNS)
+    score += 3 * _count_pattern_matches(combined_text, FINAL_CX_CONTEXT_PATTERNS)
+ 
+    if has_travel_context:
+        score += 4
+ 
+    if has_product_context:
+        score += 5
+ 
+    if has_transformation_context:
+        score += 5
+ 
+    if has_innovation_context:
+        score += 5
+ 
+    if has_sales_marketing_context:
+        score -= 12
+ 
+    if has_edtech_context:
+        score -= 8
+ 
+    if strong_project_title and not (has_product_context or has_transformation_context or has_innovation_context or has_cx_context):
+        score -= 7
+ 
+    if "маркетинг" in title_text or "marketing" in title_text:
+        score -= 18
+ 
+    if "sales" in title_text or "продаж" in title_text:
+        score -= 18
+ 
+    if "лизинг" in title_text or "leasing" in title_text:
+        score -= 10
+ 
+    if "валидац" in title_text or "сопровождени" in title_text:
+        score -= 8
+ 
+    position = _clean_match_text(payload.get("position") or "")
+    if position:
+        if position in title_text:
+            score += 12
+        else:
+            matched_tokens = sum(
+                1 for token in position.split()
+                if len(token) > 3 and token in title_text
+            )
+            score += min(matched_tokens * 3, 9)
+ 
+    for keyword in _normalize_keywords(payload.get("keywords") or [])[:6]:
+        keyword_text = _clean_match_text(keyword)
+        if not keyword_text or len(keyword_text) < 2:
+            continue
+ 
+        if keyword_text in title_text:
+            score += 4
+        elif keyword_text in description_text:
+            score += 1.5
+ 
+    if "travel" in scenario_text:
+        if has_travel_context:
+            score += 8
+        else:
+            score -= 4
+ 
+    if "product" in scenario_text:
+        if has_product_context:
+            score += 9
+        else:
+            score -= 6
+ 
+    if "transformation" in scenario_text:
+        if has_transformation_context:
+            score += 9
+        else:
+            score -= 6
+ 
+    if "innovation" in scenario_text:
+        if has_innovation_context:
+            score += 9
+        else:
+            score -= 6
+ 
+    if "adjacent_industry" in scenario_text and has_travel_context:
+        score += 4
+ 
+    if "alternate_role" in scenario_text and has_strong_positive_title:
+        score += 3
+ 
+    must_have_signal = has_strong_positive_title or has_digital_context
+    if not must_have_signal:
+        score -= 20
+ 
+    if score < 1:
+        score = 1.0
+    if score > 100:
+        score = 100.0
+ 
+    return float(score)
+ 
+ 
+def _score_final_vacancy(payload: dict, vacancy: dict):
+    if _get_product_domain(payload) == "commercial_it_enterprise":
+        return _score_commercial_it_enterprise_vacancy(payload, vacancy)
+ 
+    return _score_default_vacancy(payload, vacancy)
+ 
+ 
+def _should_keep_commercial_it_enterprise_vacancy(vacancy: dict):
+    title_text = _clean_match_text(vacancy.get("title") or "")
+    description_text = _clean_match_text(vacancy.get("description") or "")
+    combined_text = _clean_match_text(" ".join([title_text, description_text]))
+    final_score = float(vacancy.get("final_score") or 0)
+ 
+    has_exec_title = _matches_any_pattern(title_text, COMMERCIAL_EXECUTIVE_TITLE_PATTERNS)
+    has_enterprise_context = _matches_any_pattern(combined_text, COMMERCIAL_ENTERPRISE_CONTEXT_PATTERNS)
+    has_negative_title = _matches_any_pattern(title_text, COMMERCIAL_NEGATIVE_TITLE_PATTERNS)
+ 
+    if has_negative_title and final_score < 72:
+        return False
+ 
+    if "marketing" in title_text or "маркетинг" in title_text:
+        return False
+ 
+    if final_score < 50:
+        return False
+ 
+    if not has_exec_title and not has_enterprise_context and final_score < 68:
+        return False
+ 
+    return True
+ 
+ 
+def _should_keep_default_vacancy(vacancy: dict):
+    title_text = _clean_match_text(vacancy.get("title") or "")
+    description_text = _clean_match_text(vacancy.get("description") or "")
+    combined_text = _clean_match_text(" ".join([title_text, description_text]))
+    final_score = float(vacancy.get("final_score") or 0)
+ 
+    has_strong_positive_title = (
+        _matches_any_pattern(title_text, FINAL_PRODUCT_TITLE_PATTERNS)
+        or _matches_any_pattern(title_text, FINAL_TRANSFORMATION_TITLE_PATTERNS)
+        or _matches_any_pattern(title_text, FINAL_INNOVATION_TITLE_PATTERNS)
+        or _matches_any_pattern(title_text, FINAL_PROJECT_TITLE_PATTERNS)
+    )
+ 
+    heavy_negative_title = _matches_any_pattern(title_text, FINAL_HEAVY_NEGATIVE_TITLE_PATTERNS)
+    noise_title = _matches_any_pattern(title_text, FINAL_NOISE_TITLE_PATTERNS)
+    has_digital_context = _matches_any_pattern(combined_text, FINAL_DIGITAL_CONTEXT_PATTERNS)
+    has_sales_marketing_context = _matches_any_pattern(combined_text, FINAL_SALES_MARKETING_CONTEXT_PATTERNS)
+    has_edtech_context = _matches_any_pattern(combined_text, FINAL_EDTECH_CONTEXT_PATTERNS)
+    has_product_context = _matches_any_pattern(combined_text, FINAL_PRODUCT_CONTEXT_PATTERNS)
+    has_transformation_context = _matches_any_pattern(combined_text, FINAL_TRANSFORMATION_CONTEXT_PATTERNS)
+    has_innovation_context = _matches_any_pattern(combined_text, FINAL_INNOVATION_CONTEXT_PATTERNS)
+ 
+    if heavy_negative_title and not has_strong_positive_title:
+        return False
+ 
+    if noise_title and not has_strong_positive_title and final_score < 66:
+        return False
+ 
+    if has_sales_marketing_context and not (
+        has_strong_positive_title or has_product_context or has_transformation_context or has_innovation_context
+    ) and final_score < 72:
+        return False
+ 
+    if has_edtech_context and not (
+        has_strong_positive_title or has_product_context
+    ) and final_score < 70:
+        return False
+ 
+    if not has_digital_context and not has_strong_positive_title and final_score < 66:
+        return False
+ 
+    if final_score < 48:
+        return False
+ 
+    return True
+ 
+ 
+def _should_keep_final_vacancy(vacancy: dict, payload: dict):
+    if _get_product_domain(payload) == "commercial_it_enterprise":
+        return _should_keep_commercial_it_enterprise_vacancy(vacancy)
+ 
+    return _should_keep_default_vacancy(vacancy)
+ 
+ 
+def _apply_final_post_ranking(vacancies, payload):
+    ranked = []
+ 
+    for item in vacancies:
+        vacancy = dict(item)
+        vacancy["final_score"] = _score_final_vacancy(payload, vacancy)
+ 
+        if not _should_keep_final_vacancy(vacancy, payload):
+            continue
+ 
+        ranked.append(vacancy)
+ 
+    ranked.sort(
+        key=lambda item: (
+            item.get("final_score") or 0,
+            item.get("ai_score") or 0,
+            _normalize_text(item.get("title") or ""),
+        ),
+        reverse=True,
+    )
+ 
+    return ranked
+ 
+ 
+def run_parser(job_request_id: int):
+    db = app.db_session
+ 
+    job_request = (
+        db.query(JobRequest)
+        .filter(JobRequest.id == job_request_id)
+        .first()
+    )
+    if not job_request:
+        raise ValueError("job request not found")
+ 
+    payload, agent_plan = _build_agent_payload(job_request)
+ 
+    enabled_sources = _get_enabled_sources()
+    preferred_sources = payload.get("source_priority") or []
+    enabled_sources = _reorder_sources(enabled_sources, preferred_sources)
+ 
+    vacancies = []
+    sources_checked = []
+    source_errors = []
+ 
+    for source_name in enabled_sources:
+        if source_name == "manual":
+            sources_checked.append("manual")
+            try:
+                vacancies.extend(_run_manual_source(payload))
+            except Exception as exc:
+                source_errors.append(
+                    {
+                        "source": "manual",
+                        "error": str(exc),
+                    }
+                )
+ 
+        elif source_name == "mock":
+            sources_checked.append("mock")
+            vacancies.extend(_run_mock_source(payload))
+ 
+        elif source_name == "hh":
+            sources_checked.append("hh")
+            try:
+                vacancies.extend(_run_hh_with_scenarios(payload))
+            except Exception as exc:
+                source_errors.append(
+                    {
+                        "source": "hh",
+                        "error": str(exc),
+                    }
+                )
+ 
+        elif source_name == "linkedin":
+            sources_checked.append("linkedin")
+            try:
+                vacancies.extend(_run_linkedin_with_scenarios(payload))
+            except Exception as exc:
+                source_errors.append(
+                    {
+                        "source": "linkedin",
+                        "error": str(exc),
+                    }
+                )
+ 
+    vacancies = _deduplicate_vacancies(vacancies)
+    vacancies = _apply_final_post_ranking(vacancies, payload)
+ 
+    limit = Config.PARSER_RESULTS_LIMIT
+    vacancies = vacancies[:limit]
+ 
+    return {
+        "job_request_id": payload["job_request_id"],
+        "search_payload": payload,
+        "agent_plan": agent_plan,
+        "sources_checked": sources_checked,
+        "source_errors": source_errors,
+        "vacancies_found": vacancies,
+        "total_found": len(vacancies),
+    }

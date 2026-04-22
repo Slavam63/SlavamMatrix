@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ожидание запуска — Matrix Parser</title>
+
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+
+    {% set request_id = job_request_id if job_request_id is defined else (job_request.id if job_request is defined and job_request else 0) %}
+
+    <style>
+        :root {
+            --gold-soft: #f9fcba;
+            --gold-dim: rgba(249, 252, 186, 0.84);
+            --gold-faint: rgba(249, 252, 186, 0.68);
+            --border: rgba(249, 252, 186, 0.44);
+            --panel-bg: rgba(34, 19, 2, 0.72);
+            --panel-strong: rgba(34, 19, 2, 0.92);
+            --panel-strong-2: rgba(26, 15, 3, 0.96);
+            --button-bg: linear-gradient(180deg, rgba(239, 214, 136, 0.28) 0%, rgba(200, 160, 65, 0.22) 100%);
+            --button-bg-hover: linear-gradient(180deg, rgba(239, 214, 136, 0.34) 0%, rgba(200, 160, 65, 0.28) 100%);
+            --progress-bg: rgba(249, 252, 186, 0.14);
+            --progress-fill: #145229;
+            --success: #4ade80;
+            --shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+            --text: var(--gold-soft);
+            --muted: var(--gold-faint);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100%;
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--text);
+            background:
+                linear-gradient(rgba(20, 13, 5, 0.42), rgba(20, 13, 5, 0.62)),
+                linear-gradient(180deg, rgba(33, 22, 9, 0.12) 0%, rgba(18, 13, 7, 0.72) 100%),
+                url("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2400&q=100") center center / cover no-repeat fixed;
+        }
+
+        body {
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 50% 16%, rgba(255, 227, 158, 0.18), transparent 28%),
+                linear-gradient(180deg, rgba(13, 9, 5, 0.10) 0%, rgba(13, 9, 5, 0.46) 100%);
+        }
+
+        .hidden-video {
+            position: fixed;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+            left: -9999px;
+            top: -9999px;
+        }
+
+        .page {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            padding: 10px 20px 10px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .page-shell {
+            width: 100%;
+            max-width: 1780px;
+            margin: 0 auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .page-top {
+            display: grid;
+            grid-template-columns: 1fr;
+            justify-items: center;
+            align-items: start;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .logo-wrap {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding-top: 50px;
+            transform: none;
+        }
+
+        .logo-wrap img {
+            display: block;
+            width: 285px;
+            max-width: 100%;
+            height: auto;
+            opacity: 0.98;
+            filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.28));
+        }
+
+        .page-title {
+            margin: 0;
+            text-align: center;
+            color: var(--gold-soft);
+            font-size: 28px;
+            line-height: 1.18;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+            transform: none;
+            padding-top: 50px;
+        }
+
+        .eyebrow-wrap {
+            display: none;
+        }
+
+        .eyebrow {
+            display: none;
+        }
+
+        .pulse {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 0 rgba(74, 222, 128, 0.6);
+            animation: pulse 1.8s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.55);
+            }
+            70% {
+                transform: scale(1);
+                box-shadow: 0 0 0 14px rgba(74, 222, 128, 0);
+            }
+            100% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+            }
+        }
+
+        .card {
+            position: relative;
+            background: linear-gradient(180deg, rgba(34, 19, 2, 0.52) 0%, rgba(26, 15, 3, 0.58) 100%);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            backdrop-filter: blur(2px);
+            flex: 1;
+            display: flex;
+            min-height: 0;
+        }
+
+        .card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 50% 16%, rgba(255, 227, 158, 0.08), transparent 28%),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 34%);
+        }
+
+        .content {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            min-height: 100%;
+            padding: 22px 20px 10px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tools-row {
+            display: grid;
+            grid-template-columns: 320px 320px;
+            justify-content: center;
+            gap: 18px;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .moscow-box,
+        .sound-toggle,
+        .queue-box,
+        .process-box,
+        .back-btn {
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: var(--panel-bg);
+            min-width: 0;
+        }
+
+        .moscow-box {
+            min-height: 72px;
+            padding: 10px 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .moscow-label {
+            font-size: 14px;
+            line-height: 1.2;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--gold-soft);
+            overflow-wrap: anywhere;
+        }
+
+        .moscow-value {
+            margin-top: 6px;
+            font-size: 24px;
+            line-height: 1.1;
+            font-weight: 700;
+            color: var(--gold-soft);
+        }
+
+        .sound-toggle {
+            min-height: 72px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: var(--button-bg);
+            color: var(--gold-soft);
+            cursor: pointer;
+            transition: 0.2s ease;
+            box-shadow: var(--shadow);
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            text-align: center;
+        }
+
+        .sound-toggle:hover {
+            border-color: rgba(249, 252, 186, 0.72);
+            transform: translateY(-1px);
+            background: var(--button-bg-hover);
+        }
+
+        .lead {
+            margin: 0 auto 10px;
+            width: 100%;
+            max-width: 1500px;
+            color: var(--gold-soft);
+            font-size: 22px;
+            line-height: 1.32;
+            text-align: left;
+            overflow-wrap: anywhere;
+        }
+
+        .status-row {
+            margin-top: auto;
+            display: grid;
+            grid-template-columns: 390px minmax(0, 1fr) 260px;
+            gap: 18px;
+            align-items: stretch;
+        }
+
+        .queue-box {
+            min-height: 148px;
+            padding: 10px 18px 14px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .queue-caption {
+            font-size: 16px;
+            line-height: 1.2;
+            color: var(--gold-soft);
+            text-align: center;
+            margin-bottom: 10px;
+            overflow-wrap: anywhere;
+        }
+
+        .queue-number {
+            font-size: 54px;
+            line-height: 1;
+            font-weight: 700;
+            color: var(--gold-soft);
+            text-align: center;
+        }
+
+        .queue-note {
+            margin-top: 12px;
+            font-size: 13px;
+            line-height: 1.35;
+            color: var(--gold-soft);
+            text-align: center;
+            overflow-wrap: anywhere;
+        }
+
+        .process-box {
+            min-height: 148px;
+            padding: 12px 18px 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .countdown-value {
+            font-size: 38px;
+            line-height: 1;
+            font-weight: 700;
+            color: var(--gold-soft);
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        .progress-track {
+            width: 100%;
+            height: 18px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: var(--progress-bg);
+            border: 1px solid rgba(249, 252, 186, 0.20);
+        }
+
+        .progress-track.is-indeterminate .progress-fill {
+            width: 34%;
+            animation: indeterminate 1.6s infinite ease-in-out;
+        }
+
+        @keyframes indeterminate {
+            0% {
+                transform: translateX(-120%);
+            }
+            100% {
+                transform: translateX(320%);
+            }
+        }
+
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: var(--progress-fill);
+            transition: width 0.4s linear;
+        }
+
+        .back-btn {
+            min-height: 148px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 22px;
+            text-decoration: none;
+            color: var(--gold-soft);
+            font-size: 17px;
+            font-weight: 700;
+            background: var(--button-bg);
+            transition: 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            text-align: center;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-1px);
+            border-color: rgba(249, 252, 186, 0.72);
+            background: var(--button-bg-hover);
+        }
+
+        .footer-note {
+            display: none;
+        }
+
+        @media (max-width: 1400px) {
+            .status-row {
+                grid-template-columns: 1fr;
+            }
+
+            .tools-row {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 1100px) {
+            .page-top {
+                grid-template-columns: 1fr;
+                gap: 16px;
+                justify-items: center;
+            }
+
+            .logo-wrap,
+            .eyebrow-wrap {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .page {
+                padding: 16px 12px 24px;
+            }
+
+            .logo-wrap {
+                padding-top: 20px;
+            }
+
+            .logo-wrap img {
+                width: min(180px, 60vw);
+            }
+
+            .page-title {
+                padding-top: 10px;
+                font-size: clamp(20px, 6vw, 26px);
+            }
+
+            .lead {
+                font-size: 16px;
+                line-height: 1.45;
+            }
+
+            .tools-row {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .status-row {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .moscow-box,
+            .queue-box,
+            .process-box,
+            .sound-toggle,
+            .back-btn {
+                min-height: 88px;
+            }
+
+            .queue-number {
+                font-size: 36px;
+            }
+
+            .countdown-value {
+                font-size: 28px;
+            }
+
+            .progress-track {
+                height: 12px;
+            }
+
+            .back-btn {
+                width: 100%;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 760px) {
+            .page {
+                padding: 14px 12px 20px;
+            }
+
+            .content {
+                padding: 20px 14px 10px;
+            }
+
+            .tools-row {
+                grid-template-columns: 1fr;
+            }
+
+            .page-title {
+                font-size: 22px;
+            }
+
+            .countdown-value {
+                font-size: 26px;
+            }
+
+            .moscow-value {
+                font-size: 22px;
+            }
+
+            .queue-number {
+                font-size: 34px;
+            }
+
+            .sound-toggle,
+            .back-btn,
+            .moscow-box,
+            .queue-box,
+            .process-box {
+                min-height: 92px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .page {
+                padding: 12px 10px 18px;
+            }
+
+            .logo-wrap img {
+                width: min(140px, 65vw);
+            }
+
+            .page-title {
+                font-size: 20px;
+                padding-top: 6px;
+            }
+
+            .content {
+                padding: 16px 10px 8px;
+            }
+
+            .lead {
+                font-size: 14px;
+            }
+
+            .queue-number {
+                font-size: 30px;
+            }
+
+            .countdown-value {
+                font-size: 24px;
+            }
+
+            .moscow-value {
+                font-size: 20px;
+            }
+
+            .queue-caption,
+            .queue-note,
+            .moscow-label,
+            .sound-toggle {
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <video
+        id="matrixMusic"
+        class="hidden-video"
+        autoplay
+        loop
+        playsinline
+        preload="auto"
+    >
+        <source src="{{ url_for('static', filename='matrix-theme.mp4') }}" type="video/mp4">
+    </video>
+
+    <div class="page">
+        <div
+            class="page-shell"
+            id="pageRoot"
+            data-request-id="{{ request_id }}"
+            data-slot-time="{% if waiting_until_iso is defined and waiting_until_iso %}{{ waiting_until_iso }}{% elif waiting_until is defined and waiting_until %}{{ waiting_until }}{% elif slot_time is defined and slot_time %}{{ slot_time }}{% elif selected_slot is defined and selected_slot %}{{ selected_slot }}{% elif reserved_slot_time is defined and reserved_slot_time %}{{ reserved_slot_time }}{% elif slot_start is defined and slot_start %}{{ slot_start }}{% endif %}"
+        >
+            <div class="page-top">
+                <div class="logo-wrap">
+                    <img src="/static/logo-white.png" alt="Лаборатория влияния">
+                </div>
+
+                <h1 class="page-title">Ожидание парсинга</h1>
+            </div>
+
+            <div class="card">
+                <div class="content">
+                    <div class="tools-row">
+                        <div class="moscow-box">
+                            <div class="moscow-label">Московское время</div>
+                            <div class="moscow-value" id="moscowNowValue">—</div>
+                        </div>
+
+                        <button type="button" class="sound-toggle" id="soundToggle">
+                            <span id="soundToggleIcon">♫</span>
+                            <span id="soundToggleText">Включить музыку</span>
+                        </button>
+                    </div>
+
+                    <p class="lead">
+                        Заявка принята. Сейчас система отслеживает ваш слот и очередь на запуск.
+                        Как только подойдёт ваша очередь, вы автоматически будете перенаправлены
+                        на страницу парсинга.
+                    </p>
+
+                    <div class="status-row">
+                        <div class="queue-box">
+                            <div class="queue-caption">Ваша очередь на парсинг</div>
+                            <div class="queue-number" id="queueValue">—</div>
+                            <div class="queue-note" id="queueNote">Позиция обновляется автоматически</div>
+                        </div>
+
+                        <div class="process-box">
+                            <div class="process-note" style="font-size:22px; margin-bottom:8px;">Ваш парсинг начнется через</div>
+                            <div class="countdown-value" id="countdownValue">--:--</div>
+
+                            <div class="progress-track" id="progressTrack">
+                                <div class="progress-fill" id="countdownProgress"></div>
+                            </div>
+                        </div>
+
+                        <a href="/job-search" class="back-btn" id="backButton">
+                            Вернуться
+                        </a>
+                    </div>
+
+                    <div class="footer-note" id="footerNote">
+                        Если очередь уже отсутствует, вы будете автоматически переведены на страницу парсинга.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const root = document.getElementById('pageRoot');
+            const requestId = root.dataset.requestId;
+            const slotTimeRaw = (root.dataset.slotTime || '').trim();
+
+            const queueValue = document.getElementById('queueValue');
+            const queueNote = document.getElementById('queueNote');
+            const countdownValue = document.getElementById('countdownValue');
+            const footerNote = document.getElementById('footerNote');
+            const backButton = document.getElementById('backButton');
+            const progressTrack = document.getElementById('progressTrack');
+            const countdownProgress = document.getElementById('countdownProgress');
+            const moscowNowValue = document.getElementById('moscowNowValue');
+
+            const music = document.getElementById('matrixMusic');
+            const soundToggle = document.getElementById('soundToggle');
+            const soundToggleIcon = document.getElementById('soundToggleIcon');
+            const soundToggleText = document.getElementById('soundToggleText');
+
+            let audioEnabled = false;
+            let redirected = false;
+            let countdownTimer = null;
+            let statusPollTimer = null;
+            let moscowClockTimer = null;
+            let audioContext = null;
+            let countdownStartTime = null;
+            let allowUnloadCancellation = true;
+
+            function ensureAudioContext() {
+                if (!audioContext) {
+                    const Ctx = window.AudioContext || window.webkitAudioContext;
+                    if (Ctx) {
+                        audioContext = new Ctx();
+                    }
+                }
+                return audioContext;
+            }
+
+            function playClickSound() {
+                const ctx = ensureAudioContext();
+                if (!ctx) {
+                    return;
+                }
+
+                if (ctx.state === 'suspended') {
+                    ctx.resume().catch(() => {});
+                }
+
+                const oscillator = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+
+                oscillator.type = 'triangle';
+                oscillator.frequency.setValueAtTime(720, ctx.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(420, ctx.currentTime + 0.08);
+
+                gainNode.gain.setValueAtTime(0.0001, ctx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.09, ctx.currentTime + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.11);
+
+                oscillator.connect(gainNode);
+                gainNode.connect(ctx.destination);
+
+                oscillator.start();
+                oscillator.stop(ctx.currentTime + 0.12);
+            }
+
+            function syncSoundButton() {
+                soundToggleIcon.textContent = '♫';
+                soundToggleText.textContent = audioEnabled ? 'Выключить музыку' : 'Включить музыку';
+            }
+
+            function tryStartMusic() {
+                if (!music) {
+                    return;
+                }
+
+                music.muted = !audioEnabled;
+
+                if (audioEnabled) {
+                    const playPromise = music.play();
+                    if (playPromise && typeof playPromise.catch === 'function') {
+                        playPromise.catch(() => {});
+                    }
+                } else {
+                    music.pause();
+                }
+            }
+
+            async function cancelRequest() {
+                try {
+                    await fetch(`/api/v1/job-request/${requestId}/cancel`, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json'
+                        },
+                        keepalive: true,
+                        credentials: 'same-origin'
+                    });
+                } catch (error) {
+                    // намеренно молчим
+                }
+            }
+
+            function cancelRequestByBeacon() {
+                try {
+                    const url = `/api/v1/job-request/${requestId}/cancel`;
+                    const payload = new Blob(['{}'], { type: 'application/json' });
+                    navigator.sendBeacon(url, payload);
+                } catch (error) {
+                    // намеренно молчим
+                }
+            }
+
+            soundToggle.addEventListener('click', function () {
+                playClickSound();
+                audioEnabled = !audioEnabled;
+                syncSoundButton();
+                tryStartMusic();
+            });
+
+            backButton.addEventListener('click', async function (event) {
+                event.preventDefault();
+                playClickSound();
+                allowUnloadCancellation = false;
+                await cancelRequest();
+                window.location.href = '/job-search';
+            });
+
+            ['click', 'keydown', 'touchstart'].forEach(function (eventName) {
+                window.addEventListener(eventName, function bootstrapAudio() {
+                    const ctx = ensureAudioContext();
+                    if (ctx && ctx.state === 'suspended') {
+                        ctx.resume().catch(() => {});
+                    }
+                    window.removeEventListener(eventName, bootstrapAudio);
+                }, { once: true });
+            });
+
+            syncSoundButton();
+            tryStartMusic();
+
+            function normalizeDate(raw) {
+                if (!raw) {
+                    return null;
+                }
+
+                const trimmed = String(raw).trim();
+
+                if (!trimmed) {
+                    return null;
+                }
+
+                if (trimmed.includes('T') || trimmed.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(trimmed)) {
+                    const nativeDate = new Date(trimmed);
+                    return Number.isNaN(nativeDate.getTime()) ? null : nativeDate;
+                }
+
+                const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+                if (match) {
+                    const year = match[1];
+                    const month = match[2];
+                    const day = match[3];
+                    const hour = match[4];
+                    const minute = match[5];
+                    const second = match[6] || '00';
+
+                    const withTimezone = `${year}-${month}-${day}T${hour}:${minute}:${second}+03:00`;
+                    const parsed = new Date(withTimezone);
+                    return Number.isNaN(parsed.getTime()) ? null : parsed;
+                }
+
+                const fallback = new Date(trimmed);
+                return Number.isNaN(fallback.getTime()) ? null : fallback;
+            }
+
+            const slotTime = normalizeDate(slotTimeRaw);
+
+            function formatRemaining(ms) {
+                if (ms <= 0) {
+                    return '00:00';
+                }
+
+                const totalSeconds = Math.floor(ms / 1000);
+                const hours = Math.floor(totalSeconds / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                const seconds = totalSeconds % 60;
+
+                if (hours > 0) {
+                    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                }
+
+                return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }
+
+            function formatMoscowClock(date) {
+                return new Intl.DateTimeFormat('ru-RU', {
+                    timeZone: 'Europe/Moscow',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                }).format(date);
+            }
+
+            function updateMoscowClock() {
+                if (moscowNowValue) {
+                    moscowNowValue.textContent = formatMoscowClock(new Date());
+                }
+            }
+
+            function setProgress(diff) {
+                if (!countdownProgress || !progressTrack) {
+                    return;
+                }
+
+                if (!slotTime || !countdownStartTime) {
+                    progressTrack.classList.add('is-indeterminate');
+                    countdownProgress.style.width = '34%';
+                    return;
+                }
+
+                progressTrack.classList.remove('is-indeterminate');
+
+                const total = slotTime.getTime() - countdownStartTime.getTime();
+
+                if (total <= 0) {
+                    countdownProgress.style.width = '100%';
+                    return;
+                }
+
+                const elapsed = total - diff;
+                const percent = Math.max(0, Math.min(100, (elapsed / total) * 100));
+                countdownProgress.style.width = `${percent}%`;
+            }
+
+            function goToParsing() {
+                if (redirected) {
+                    return;
+                }
+                redirected = true;
+                allowUnloadCancellation = false;
+                window.location.href = `/job-parsing/${requestId}`;
+            }
+
+            function goToResults() {
+                if (redirected) {
+                    return;
+                }
+                redirected = true;
+                allowUnloadCancellation = false;
+                window.location.href = `/job-results/${requestId}`;
+            }
+
+            function startCountdown() {
+                if (!slotTime) {
+                    countdownValue.textContent = '--:--';
+                    setProgress(0);
+                    return;
+                }
+
+                countdownStartTime = new Date();
+
+                function tick() {
+                    const now = new Date();
+                    const diff = slotTime.getTime() - now.getTime();
+
+                    if (diff <= 0) {
+                        countdownValue.textContent = '00:00';
+                        if (countdownProgress) {
+                            countdownProgress.style.width = '100%';
+                        }
+                        goToParsing();
+                        return;
+                    }
+
+                    countdownValue.textContent = formatRemaining(diff);
+                    setProgress(diff);
+                }
+
+                tick();
+                countdownTimer = window.setInterval(tick, 1000);
+            }
+
+            async function pollStatus() {
+                try {
+                    const response = await fetch(`/api/v1/status/${requestId}`, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json'
+                        },
+                        cache: 'no-store'
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+
+                    const rawStatus = String(data.status || '').toLowerCase();
+                    const rawTaskStatus = String(data.task_status || '').toLowerCase();
+                    const queuePosition = data.queue_position;
+
+                    if (rawStatus === 'cancelled' || rawTaskStatus === 'cancelled') {
+                        footerNote.textContent = 'Заявка отменена. Возвращаемся к началу.';
+                        allowUnloadCancellation = false;
+                        window.location.href = '/job-search';
+                        return;
+                    }
+
+                    if (rawStatus === 'completed' || rawStatus === 'done' || rawTaskStatus === 'completed' || rawTaskStatus === 'done') {
+                        footerNote.textContent = 'Парсинг завершён. Открываем страницу результата.';
+                        goToResults();
+                        return;
+                    }
+
+                    if (
+                        rawStatus === 'running' ||
+                        rawStatus === 'parsing' ||
+                        rawStatus === 'processing' ||
+                        rawTaskStatus === 'running' ||
+                        rawTaskStatus === 'started' ||
+                        rawTaskStatus === 'processing'
+                    ) {
+                        goToParsing();
+                        return;
+                    }
+
+                    if (queuePosition === null || queuePosition === undefined || Number(queuePosition) <= 0) {
+                        queueValue.textContent = '0';
+                        queueNote.textContent = 'Переходим к парсингу…';
+                        goToParsing();
+                        return;
+                    }
+
+                    queueValue.textContent = String(queuePosition);
+                    queueNote.textContent = 'Позиция обновляется автоматически';
+                } catch (error) {
+                    queueValue.textContent = '—';
+                    queueNote.textContent = 'Повторяем проверку автоматически';
+                }
+            }
+
+            updateMoscowClock();
+            moscowClockTimer = window.setInterval(updateMoscowClock, 1000);
+
+            startCountdown();
+            pollStatus();
+            statusPollTimer = window.setInterval(pollStatus, 5000);
+
+            window.addEventListener('beforeunload', function () {
+                if (countdownTimer) {
+                    clearInterval(countdownTimer);
+                }
+                if (statusPollTimer) {
+                    clearInterval(statusPollTimer);
+                }
+                if (moscowClockTimer) {
+                    clearInterval(moscowClockTimer);
+                }
+                if (allowUnloadCancellation && !redirected) {
+                    cancelRequestByBeacon();
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

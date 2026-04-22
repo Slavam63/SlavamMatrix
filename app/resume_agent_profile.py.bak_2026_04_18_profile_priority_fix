@@ -1,0 +1,1025 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, asdict
+from typing import Any
+import re
+
+from app.resume_domain import detect_product_domain
+from app.resume_form_mapper import map_resume_to_form_data
+
+
+ROLE_SYNONYMS = {
+    "генеральный директор": [
+        "генеральный директор",
+        "гендиректор",
+        "ceo",
+        "chief executive officer",
+        "managing director",
+        "управляющий директор",
+    ],
+    "исполнительный директор": [
+        "исполнительный директор",
+        "executive director",
+    ],
+    "операционный директор": [
+        "операционный директор",
+        "coo",
+        "chief operating officer",
+        "operations director",
+    ],
+    "финансовый директор": [
+        "финансовый директор",
+        "cfo",
+        "finance director",
+        "head of finance",
+    ],
+    "коммерческий директор": [
+        "коммерческий директор",
+        "cco",
+        "chief commercial officer",
+        "commercial director",
+    ],
+    "директор по продажам": [
+        "директор по продажам",
+        "head of sales",
+        "sales director",
+        "sales lead",
+    ],
+    "директор по развитию бизнеса": [
+        "директор по развитию бизнеса",
+        "business development director",
+        "head of business development",
+        "bd director",
+    ],
+    "руководитель цифровых продуктов": [
+        "руководитель цифровых продуктов",
+        "head of product",
+        "product lead",
+        "product manager",
+        "менеджер продукта",
+        "руководитель продукта",
+        "владелец продукта",
+    ],
+    "директор по цифровой трансформации": [
+        "директор по цифровой трансформации",
+        "руководитель цифровой трансформации",
+        "head of digital transformation",
+        "cdto",
+        "cdo",
+    ],
+    "директор по инновациям": [
+        "директор по инновациям",
+        "head of innovation",
+        "innovation lead",
+        "руководитель центра инноваций",
+        "руководитель лаборатории инноваций",
+    ],
+    "руководитель проекта": [
+        "руководитель проекта",
+        "руководитель проектов",
+        "project manager",
+        "program manager",
+    ],
+}
+
+
+TRAVEL_PATTERNS = [
+    r"\btravel\b",
+    r"\bтуризм\b",
+    r"\bгостеприим",
+    r"\bhospitality\b",
+    r"\bcustomer journey\b",
+    r"\bcx\b",
+    r"\btrip\b",
+    r"\bпутешеств",
+    r"\bотел",
+]
+
+PRODUCT_PATTERNS = [
+    r"\bproduct\b",
+    r"\bпродукт",
+    r"\bmvp\b",
+    r"\broadmap\b",
+    r"\bbacklog\b",
+    r"\bproduct portfolio\b",
+    r"\bportfolio management\b",
+]
+
+INNOVATION_PATTERNS = [
+    r"\binnovation\b",
+    r"\bинновац",
+    r"\bлаборатор",
+    r"\bакселератор",
+    r"\bстартап",
+]
+
+TRANSFORMATION_PATTERNS = [
+    r"\bцифров",
+    r"\bdigital transformation\b",
+    r"\btransform",
+    r"\bcdto\b",
+    r"\bcdo\b",
+]
+
+AI_PATTERNS = [
+    r"\bai\b",
+    r"\bml\b",
+    r"\bllm\b",
+    r"\bdata science\b",
+    r"\badvanced analytics\b",
+    r"\bdata-driven\b",
+]
+
+SALES_MARKERS = [
+    "продаж",
+    "sales",
+    "коммерческ",
+    "commercial",
+    "business development",
+    "развитию бизнеса",
+    "bd",
+    "канальн",
+    "партнерск",
+    "crm",
+    "воронк",
+    "kpi",
+    "okr",
+    "p&l",
+    "лпр",
+]
+
+INDUSTRIAL_MARKERS = [
+    "производств",
+    "машиностро",
+    "электрооборуд",
+    "инжинир",
+    "завод",
+    "промышлен",
+    "локализац",
+    "импортозамещ",
+    "минпромторг",
+    "erp",
+    "1с: erp",
+]
+
+IT_ENTERPRISE_MARKERS = [
+    "software",
+    "программ",
+    "облачн",
+    "cloud",
+    "server",
+    "сервер",
+    "кибербез",
+    "информационн",
+    "информационная безопасность",
+    "security",
+    "saas",
+    "oracle",
+    "ibm",
+    "veritas",
+    "myoffice",
+    "мойофис",
+    "vendor",
+    "вендор",
+    "crm",
+    "erp",
+    "digital",
+    "цифров",
+    "ит-",
+    " it ",
+]
+
+RUSSIAN_LOCATION_MARKERS = [
+    "россия",
+    "москва",
+    "санкт-петербург",
+    "петербург",
+    "казань",
+    "екатеринбург",
+    "новосибирск",
+    "краснодар",
+    "нижний новгород",
+    "самара",
+    "ростов",
+    "калининград",
+    "российская федерация",
+]
+
+GENERIC_EXECUTIVE_KEYWORDS_RU = [
+    "операционное управление",
+    "управление изменениями",
+    "развитие бизнеса",
+]
+
+GENERIC_EXECUTIVE_KEYWORDS_EN = [
+    "operations management",
+    "change management",
+    "business development",
+]
+
+
+@dataclass
+class ResumeAgentProfile:
+    primary_role: str
+    alternate_roles: list[str]
+    primary_industry: str
+    adjacent_contexts: list[str]
+    recommended_form_fields: dict[str, Any]
+    clarification_question: str
+    reasoning: str
+    confidence: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _clean_text(value: str) -> str:
+    value = (value or "").strip()
+    value = re.sub(r"\s+", " ", value)
+    return value.strip(" ,;.-")
+
+
+def _clean_list(items: list[str]) -> list[str]:
+    result = []
+    seen = set()
+
+    for item in items:
+        value = _clean_text(item)
+        if not value:
+            continue
+        key = value.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(value)
+
+    return result
+
+
+def _normalize_role(value: str) -> str:
+    text = _clean_text(value)
+    if not text:
+        return ""
+
+    text = re.sub(r"^\s*и\s+зарплата\s*", "", text, flags=re.I)
+    text = re.sub(r"\bи\s+зарплата\b", "", text, flags=re.I)
+    text = _clean_text(text)
+    text_lower = text.lower()
+
+    for canonical, variants in ROLE_SYNONYMS.items():
+        if any(variant in text_lower for variant in variants):
+            return canonical.capitalize()
+
+    if text_lower.startswith("руководителя "):
+        text = re.sub(r"^руководителя ", "руководитель ", text, flags=re.I)
+    if text_lower.startswith("директора "):
+        text = re.sub(r"^директора ", "директор ", text, flags=re.I)
+
+    return text.capitalize() if text else ""
+
+
+def _is_probable_role(value: str) -> bool:
+    text = _clean_text(value)
+    if not text:
+        return False
+
+    text_lower = text.lower()
+
+    reject_markers = [
+        "диплом",
+        "acca",
+        "cima",
+        "cpa",
+        "certificate",
+        "certification",
+        "training",
+        "school",
+        "university",
+        "education",
+        "курс",
+        "обучение",
+        "сертификат",
+        "международной финансовой отчетности",
+        "отчетности",
+        "hock",
+        "ielts",
+        "toefl",
+        "ключевые компетенции",
+        "личные качества",
+        "дополнительные навыки",
+        "растущий бизнес",
+        "трансформации компаний",
+    ]
+    if any(marker in text_lower for marker in reject_markers):
+        return False
+
+    company_markers = [
+        "ооо",
+        "ао",
+        "пао",
+        "зао",
+        "оао",
+        "llc",
+        "inc",
+        "ltd",
+        "group",
+        "гк ",
+        "группа компаний",
+    ]
+    if any(marker in text_lower for marker in company_markers):
+        return False
+
+    if text.startswith("•") or text.startswith("-"):
+        return False
+
+    if '"' in text or "«" in text or "»" in text:
+        return False
+
+    if len(text.split()) > 6:
+        return False
+
+    allowed_role_markers = [
+        "директор",
+        "руководитель",
+        "head",
+        "chief",
+        "officer",
+        "manager",
+        "lead",
+        "генераль",
+        "исполнитель",
+        "операцион",
+        "финансов",
+        "коммерческ",
+        "sales",
+        "продаж",
+        "business development",
+        "развитию бизнеса",
+        "product",
+        "project",
+        "innovation",
+        "transformation",
+        "продукт",
+        "проект",
+        "инновац",
+        "трансформац",
+    ]
+
+    return any(marker in text_lower for marker in allowed_role_markers)
+
+
+def _extract_role_candidates(text: str, mapped_position: str) -> list[str]:
+    candidates = []
+    text_lower = text.lower()
+
+    executive_priority = [
+        ("Генеральный директор", [
+            "генеральный директор",
+            "гендиректор",
+            "ceo",
+            "chief executive officer",
+            "управляющий директор",
+            "managing director",
+            "член совета директоров",
+        ]),
+        ("Исполнительный директор", [
+            "исполнительный директор",
+            "executive director",
+        ]),
+        ("Операционный директор", [
+            "операционный директор",
+            "coo",
+            "chief operating officer",
+            "operations director",
+        ]),
+        ("Финансовый директор", [
+            "финансовый директор",
+            "cfo",
+            "finance director",
+            "head of finance",
+        ]),
+        ("Коммерческий директор", [
+            "коммерческий директор",
+            "chief commercial officer",
+            "commercial director",
+            "cco",
+        ]),
+        ("Директор по продажам", [
+            "директор по продажам",
+            "sales director",
+            "head of sales",
+        ]),
+        ("Директор по развитию бизнеса", [
+            "директор по развитию бизнеса",
+            "business development director",
+            "head of business development",
+        ]),
+    ]
+
+    for canonical, variants in executive_priority:
+        if any(variant in text_lower for variant in variants):
+            candidates.append(canonical)
+
+    match = re.search(
+        r"желаемая должность(?:\s+и\s+зарплата)?\s*(.+?)(?:ключевые компетенции|занятость:|график:|о себе|опыт работы|$)",
+        text,
+        flags=re.I | re.S,
+    )
+    if match:
+        block = _clean_text(match.group(1))
+        block = re.sub(r"\bи\s+зарплата\b", "", block, flags=re.I)
+        parts = re.split(r"/|\||;|\n|, (?=[А-ЯA-Z])", block)
+        for part in parts:
+            role = _normalize_role(part)
+            if role and _is_probable_role(role):
+                candidates.append(role)
+
+    if mapped_position:
+        normalized_mapped = _normalize_role(mapped_position)
+        if normalized_mapped and _is_probable_role(normalized_mapped):
+            candidates.append(normalized_mapped)
+
+    for canonical in ROLE_SYNONYMS.keys():
+        if canonical in text_lower:
+            candidates.append(canonical.capitalize())
+
+    filtered_candidates = []
+    seen = set()
+    for role in candidates:
+        normalized = _normalize_role(role)
+        if not normalized or not _is_probable_role(normalized):
+            continue
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        filtered_candidates.append(normalized)
+
+    return filtered_candidates
+
+
+def _has_any(text: str, patterns: list[str]) -> bool:
+    return any(re.search(pattern, text, flags=re.I) for pattern in patterns)
+
+
+def _normalize_location(value: str) -> str:
+    text = _clean_text(value)
+    if not text:
+        return ""
+
+    text = re.split(
+        r"\b(?:гражданство|разрешение на работу|готов к переезду|готова к переезду|готов к командировкам|готова к командировкам)\b",
+        text,
+        maxsplit=1,
+        flags=re.I,
+    )[0]
+    text = re.split(r"[;|,/]", text, maxsplit=1)[0]
+    return _clean_text(text)
+
+
+def _is_sales_core(text: str, primary_role: str) -> bool:
+    text_lower = text.lower()
+    role_lower = (primary_role or "").lower()
+
+    sales_score = sum(1 for marker in SALES_MARKERS if marker in text_lower)
+    role_sales = any(
+        marker in role_lower
+        for marker in ["коммерческ", "продаж", "business development", "развитию бизнеса", "cco"]
+    )
+
+    return sales_score >= 4 or role_sales
+
+
+def _is_industrial_core(text: str) -> bool:
+    text_lower = text.lower()
+    score = sum(1 for marker in INDUSTRIAL_MARKERS if marker in text_lower)
+    return score >= 2
+
+
+def _has_it_enterprise_context(text: str) -> bool:
+    text_lower = text.lower()
+    score = sum(1 for marker in IT_ENTERPRISE_MARKERS if marker in text_lower)
+    return score >= 3
+
+
+def _prefer_russian_output(text: str, current_form_data: dict[str, Any]) -> bool:
+    location = _clean_text(current_form_data.get("location") or "").lower()
+    if any(marker in location for marker in RUSSIAN_LOCATION_MARKERS):
+        return True
+
+    if "россия" in text.lower():
+        return True
+
+    cyrillic_count = len(re.findall(r"[А-Яа-яЁё]", text))
+    latin_count = len(re.findall(r"[A-Za-z]", text))
+
+    return cyrillic_count >= latin_count
+
+
+def _infer_primary_industry(
+    mapped_query_text: str,
+    text: str,
+    product_domain: str,
+    primary_role: str,
+) -> tuple[str, list[str]]:
+    adjacent = []
+    text_lower = text.lower()
+    mapped_clean = _clean_text(mapped_query_text)
+
+    if product_domain == "food_product":
+        return "FMCG / Retail / Пищевая отрасль", adjacent
+
+    if _has_any(text, TRAVEL_PATTERNS):
+        adjacent.append("Travel / Hospitality / CX")
+
+    if _is_industrial_core(text):
+        return "Производство / Инжиниринг", _clean_list(adjacent)
+
+    if _is_sales_core(text, primary_role):
+        if _has_it_enterprise_context(text):
+            adjacent.append("IT / Digital / Product")
+        return "Продажи / Развитие бизнеса", _clean_list(adjacent)
+
+    if _has_any(text, PRODUCT_PATTERNS + INNOVATION_PATTERNS + TRANSFORMATION_PATTERNS + AI_PATTERNS):
+        return "IT / Digital / Product", _clean_list(adjacent)
+
+    if mapped_clean and mapped_clean.lower() not in {"другое", "другое / other", "other"}:
+        return mapped_clean, _clean_list(adjacent)
+
+    if any(role_marker in text_lower for role_marker in [
+        "генеральный директор",
+        "исполнительный директор",
+        "операционный директор",
+        "управляющий директор",
+    ]):
+        return "Операционное управление", _clean_list(adjacent)
+
+    return "", _clean_list(adjacent)
+
+
+def _sales_keyword_pack(primary_role: str, text: str, prefer_russian: bool) -> list[str]:
+    role_lower = (primary_role or "").lower()
+    text_lower = text.lower()
+
+    keywords = []
+
+    if prefer_russian:
+        if "коммерческ" in role_lower or "cco" in role_lower:
+            keywords.extend([
+                "коммерческая стратегия",
+                "управление продажами",
+                "b2b продажи",
+                "переговоры",
+                "crm",
+                "партнерская сеть",
+            ])
+        elif "продаж" in role_lower or "sales" in role_lower:
+            keywords.extend([
+                "стратегия продаж",
+                "b2b продажи",
+                "crm",
+                "переговоры",
+                "рост выручки",
+                "управление продажами",
+            ])
+        elif "развитию бизнеса" in role_lower or "business development" in role_lower:
+            keywords.extend([
+                "развитие бизнеса",
+                "партнерства",
+                "b2b продажи",
+                "привлечение клиентов",
+                "переговоры",
+                "crm",
+            ])
+        else:
+            keywords.extend([
+                "b2b продажи",
+                "рост выручки",
+                "коммерческая стратегия",
+                "crm",
+                "переговоры",
+            ])
+    else:
+        if "коммерческ" in role_lower or "cco" in role_lower:
+            keywords.extend([
+                "commercial strategy",
+                "revenue growth",
+                "b2b sales",
+                "negotiations",
+                "crm",
+                "partnerships",
+            ])
+        elif "продаж" in role_lower or "sales" in role_lower:
+            keywords.extend([
+                "sales strategy",
+                "b2b sales",
+                "crm",
+                "negotiations",
+                "revenue growth",
+                "sales management",
+            ])
+        elif "развитию бизнеса" in role_lower or "business development" in role_lower:
+            keywords.extend([
+                "business development",
+                "partnerships",
+                "b2b sales",
+                "new business",
+                "negotiations",
+                "crm",
+            ])
+        else:
+            keywords.extend([
+                "b2b sales",
+                "revenue growth",
+                "commercial strategy",
+                "crm",
+                "negotiations",
+            ])
+
+    if "каналь" in text_lower or "партнерск" in text_lower or "channel" in text_lower:
+        keywords.append("канальные продажи" if prefer_russian else "channel sales")
+    if "международ" in text_lower or "international" in text_lower:
+        keywords.append("международные продажи" if prefer_russian else "international sales")
+
+    if _has_it_enterprise_context(text):
+        if prefer_russian:
+            keywords.extend([
+                "enterprise продажи",
+                "облачные решения",
+                "информационная безопасность",
+            ])
+        else:
+            keywords.extend([
+                "enterprise sales",
+                "cloud solutions",
+                "information security",
+            ])
+
+    return _clean_list(keywords)
+
+
+def _build_keywords(
+    primary_role: str,
+    primary_industry: str,
+    text: str,
+    adjacent: list[str],
+    prefer_russian: bool,
+) -> list[str]:
+    keywords = []
+
+    role_lower = primary_role.lower()
+    industry_lower = primary_industry.lower()
+    is_industrial_core = "производство" in industry_lower or "инжиниринг" in industry_lower
+    is_digital_core = (
+        "digital" in industry_lower
+        or "цифров" in industry_lower
+        or "product" in industry_lower
+        or "it" in industry_lower
+        or "ai" in industry_lower
+    )
+    is_sales_core = "продажи" in industry_lower or "развитие бизнеса" in industry_lower
+
+    if is_sales_core:
+        keywords.extend(_sales_keyword_pack(primary_role, text, prefer_russian))
+
+    elif is_industrial_core:
+        if prefer_russian:
+            keywords.extend([
+                "операционная эффективность",
+                "производственный менеджмент",
+                "erp",
+                "улучшение процессов",
+            ])
+            if _has_any(text, TRANSFORMATION_PATTERNS):
+                keywords.append("цифровая трансформация")
+            if _has_any(text, INNOVATION_PATTERNS):
+                keywords.append("управление инновациями")
+        else:
+            keywords.extend([
+                "operational excellence",
+                "production management",
+                "erp",
+                "process improvement",
+            ])
+            if _has_any(text, TRANSFORMATION_PATTERNS):
+                keywords.append("digital transformation")
+            if _has_any(text, INNOVATION_PATTERNS):
+                keywords.append("innovation management")
+
+    elif is_digital_core:
+        if prefer_russian:
+            if "продукт" in role_lower:
+                keywords.extend([
+                    "управление продуктом",
+                    "продуктовая стратегия",
+                    "roadmap",
+                    "mvp",
+                    "продуктовый портфель",
+                ])
+            elif "трансформац" in role_lower:
+                keywords.extend([
+                    "цифровая трансформация",
+                    "управление изменениями",
+                    "редизайн процессов",
+                    "операционная модель",
+                ])
+            elif "инновац" in role_lower:
+                keywords.extend([
+                    "управление инновациями",
+                    "portfolio management",
+                    "продуктовые инновации",
+                    "экосистемные партнерства",
+                ])
+            else:
+                keywords.extend([
+                    "цифровая стратегия",
+                    "управление продуктом",
+                    "data-driven",
+                    "трансформация",
+                ])
+
+            if _has_any(text, AI_PATTERNS):
+                keywords.extend(["ai", "ml"])
+        else:
+            if "продукт" in role_lower:
+                keywords.extend([
+                    "product management",
+                    "product strategy",
+                    "roadmap",
+                    "mvp",
+                    "product portfolio",
+                ])
+            elif "трансформац" in role_lower:
+                keywords.extend([
+                    "digital transformation",
+                    "change management",
+                    "process redesign",
+                    "operating model",
+                ])
+            elif "инновац" in role_lower:
+                keywords.extend([
+                    "innovation management",
+                    "portfolio management",
+                    "product innovation",
+                    "ecosystem partnerships",
+                ])
+            else:
+                keywords.extend([
+                    "digital strategy",
+                    "product management",
+                    "data-driven",
+                    "transformation",
+                ])
+
+            if _has_any(text, AI_PATTERNS):
+                keywords.extend(["ai", "ml"])
+
+    else:
+        if prefer_russian:
+            if "продукт" in role_lower:
+                keywords.extend(["управление продуктом", "продуктовая стратегия"])
+            elif "трансформац" in role_lower:
+                keywords.extend(["цифровая трансформация", "управление изменениями"])
+            elif "инновац" in role_lower:
+                keywords.extend(["управление инновациями"])
+            elif "проект" in role_lower:
+                keywords.extend(["управление проектами", "управление программами"])
+            elif "операцион" in role_lower:
+                keywords.extend(["операционное управление", "управление изменениями"])
+            elif "генераль" in role_lower or "исполнитель" in role_lower:
+                keywords.extend(["операционное управление", "развитие бизнеса"])
+            else:
+                keywords.extend(GENERIC_EXECUTIVE_KEYWORDS_RU)
+        else:
+            if "продукт" in role_lower:
+                keywords.extend(["product management", "product strategy"])
+            elif "трансформац" in role_lower:
+                keywords.extend(["digital transformation", "change management"])
+            elif "инновац" in role_lower:
+                keywords.extend(["innovation management"])
+            elif "проект" in role_lower:
+                keywords.extend(["project management", "program management"])
+            elif "операцион" in role_lower:
+                keywords.extend(["operations management", "change management"])
+            elif "генераль" in role_lower or "исполнитель" in role_lower:
+                keywords.extend(["operations management", "business development"])
+            else:
+                keywords.extend(GENERIC_EXECUTIVE_KEYWORDS_EN)
+
+    allow_adjacent_keywords = not (is_industrial_core or is_digital_core or is_sales_core)
+    if adjacent and allow_adjacent_keywords:
+        if prefer_russian:
+            keywords.extend(["туризм", "гостеприимство"])
+        else:
+            keywords.extend(["travel", "hospitality"])
+
+    return _clean_list(keywords)[:8]
+
+
+def _build_clarification_question(primary_role: str, alternate_roles: list[str], adjacent_contexts: list[str]) -> str:
+    if len(alternate_roles) >= 2:
+        return (
+            f"Я предполагаю, что ваш основной запрос — «{primary_role}». "
+            f"Нужно ли также искать смежные роли: {', '.join(alternate_roles[:3])}?"
+        )
+
+    if adjacent_contexts:
+        return (
+            f"Я понял ваш профиль как «{primary_role}». "
+            f"Нужно ли отдельно учитывать контекст: {', '.join(adjacent_contexts)}?"
+        )
+
+    return (
+        f"Я понял ваш основной запрос как «{primary_role}». "
+        "Хотите скорректировать приоритет роли или отрасли перед поиском?"
+    )
+
+
+def _detect_experience_anchor(text: str, primary_role: str) -> dict[str, str]:
+    text_lower = text.lower()
+    role_lower = (primary_role or "").lower()
+
+    industrial_corporate_markers = [
+        "сибур",
+        "холдинг",
+        "производствен",
+        "промышлен",
+        "машиностро",
+        "электрооборуд",
+        "инжинир",
+        "завод",
+        "корпоративн",
+    ]
+
+    digital_innovation_markers = [
+        "цифров",
+        "innovation",
+        "инновац",
+        "ml",
+        "llm",
+        "data-driven",
+        "product portfolio",
+        "mvp",
+        "лаборатор",
+    ]
+
+    travel_markers = [
+        "travel",
+        "туризм",
+        "гостеприим",
+        "путешеств",
+        "travel-проект",
+    ]
+
+    sales_markers = [
+        "продаж",
+        "sales",
+        "коммерческ",
+        "commercial",
+        "business development",
+        "развитию бизнеса",
+        "канальн",
+        "партнерск",
+        "crm",
+        "воронк",
+        "p&l",
+        "kpi",
+        "okr",
+    ]
+
+    industrial_score = sum(1 for marker in industrial_corporate_markers if marker in text_lower)
+    digital_score = sum(1 for marker in digital_innovation_markers if marker in text_lower)
+    travel_score = sum(1 for marker in travel_markers if marker in text_lower)
+    sales_score = sum(1 for marker in sales_markers if marker in text_lower)
+
+    if industrial_score >= 2 and digital_score >= 2:
+        return {
+            "primary_industry_override": "Производство / Инжиниринг",
+            "anchor_type": "industrial_digital_corporate",
+        }
+
+    if sales_score >= 4 or any(x in role_lower for x in ["коммерческ", "продаж", "business development", "развитию бизнеса", "cco"]):
+        return {
+            "primary_industry_override": "Продажи / Развитие бизнеса",
+            "anchor_type": "commercial_sales_corporate",
+        }
+
+    if digital_score >= 3 and travel_score >= 2:
+        return {
+            "primary_industry_override": "IT / Digital / Product",
+            "anchor_type": "digital_core_with_travel_context",
+        }
+
+    return {
+        "primary_industry_override": "",
+        "anchor_type": "",
+    }
+
+
+def _build_reasoning(
+    primary_role: str,
+    alternate_roles: list[str],
+    primary_industry: str,
+    adjacent_contexts: list[str],
+    text: str,
+) -> str:
+    reasons = [f"Основная роль определена как: {primary_role}"]
+    if alternate_roles:
+        reasons.append(f"Смежные роли: {', '.join(alternate_roles[:3])}")
+    if primary_industry:
+        reasons.append(f"Основная отрасль: {primary_industry}")
+
+    markers = []
+    if _has_any(text, PRODUCT_PATTERNS):
+        markers.append("product")
+    if _has_any(text, INNOVATION_PATTERNS):
+        markers.append("innovation")
+    if _has_any(text, TRANSFORMATION_PATTERNS):
+        markers.append("transformation")
+    if _is_sales_core(text, primary_role):
+        markers.append("sales/commercial")
+    if _has_it_enterprise_context(text):
+        markers.append("it-enterprise")
+    if adjacent_contexts:
+        markers.extend(adjacent_contexts)
+
+    if markers:
+        reasons.append(f"Ключевые смысловые маркеры: {', '.join(_clean_list(markers))}")
+
+    return " | ".join(reasons)
+
+
+def build_resume_agent_profile(resume_text: str, current_form_data: dict[str, Any] | None = None) -> dict[str, Any]:
+    current_form_data = current_form_data or {}
+    text = _clean_text(resume_text)
+    mapped = map_resume_to_form_data(text)
+    product_domain_info = detect_product_domain(text)
+    product_domain = product_domain_info.get("product_domain", "unknown")
+
+    role_candidates = _extract_role_candidates(text, mapped.get("position") or "")
+    primary_role = role_candidates[0] if role_candidates else _normalize_role(current_form_data.get("position") or "") or "Руководитель"
+    alternate_roles = role_candidates[1:3]
+
+    primary_industry, adjacent_contexts = _infer_primary_industry(
+        mapped_query_text=(mapped.get("query_text") or current_form_data.get("query_text") or ""),
+        text=text,
+        product_domain=product_domain,
+        primary_role=primary_role,
+    )
+
+    experience_anchor = _detect_experience_anchor(text, primary_role)
+    if experience_anchor.get("primary_industry_override"):
+        primary_industry = experience_anchor["primary_industry_override"]
+
+    prefer_russian = _prefer_russian_output(text, current_form_data)
+    keywords = _build_keywords(primary_role, primary_industry, text, adjacent_contexts, prefer_russian)
+
+    recommended_form_fields = {
+        "position": primary_role,
+        "query_text": primary_industry,
+        "keywords": ", ".join(keywords),
+        "location": _normalize_location(current_form_data.get("location") or mapped.get("location") or ""),
+        "email": _clean_text(current_form_data.get("email") or mapped.get("email") or "").lower(),
+        "salary_min": _clean_text(str(current_form_data.get("salary_min") or mapped.get("salary_min") or "")),
+        "employment_type": _clean_text(current_form_data.get("employment_type") or mapped.get("employment_type") or ""),
+        "work_format": _clean_text(current_form_data.get("work_format") or mapped.get("work_format") or ""),
+        "remote": bool(current_form_data.get("remote") or mapped.get("remote")),
+    }
+
+    clarification_question = _build_clarification_question(
+        primary_role=primary_role,
+        alternate_roles=alternate_roles,
+        adjacent_contexts=adjacent_contexts,
+    )
+
+    reasoning = _build_reasoning(
+        primary_role=primary_role,
+        alternate_roles=alternate_roles,
+        primary_industry=primary_industry,
+        adjacent_contexts=adjacent_contexts,
+        text=text,
+    )
+
+    confidence = 0.55
+    if primary_role:
+        confidence += 0.15
+    if primary_industry:
+        confidence += 0.1
+    if alternate_roles:
+        confidence += 0.05
+    if adjacent_contexts:
+        confidence += 0.05
+    confidence = min(confidence, 0.9)
+
+    profile = ResumeAgentProfile(
+        primary_role=primary_role,
+        alternate_roles=alternate_roles,
+        primary_industry=primary_industry,
+        adjacent_contexts=adjacent_contexts,
+        recommended_form_fields=recommended_form_fields,
+        clarification_question=clarification_question,
+        reasoning=reasoning,
+        confidence=confidence,
+    )
+
+    return profile.to_dict()

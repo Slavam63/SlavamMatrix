@@ -1,0 +1,769 @@
+
+import html
+import re
+
+
+SECTION_HEADERS = {
+    "target": [
+        "желаемая должность",
+        "желаемая должность и зарплата",
+        "position",
+        "objective",
+        "цель",
+        "должность",
+    ],
+    "summary": [
+        "о себе",
+        "обо мне",
+        "summary",
+        "profile",
+        "общие сведения",
+    ],
+    "experience": [
+        "опыт работы",
+        "experience",
+    ],
+    "education": [
+        "образование",
+        "education",
+    ],
+    "skills": [
+        "навыки",
+        "key skills",
+        "skills",
+        "профессиональные навыки",
+    ],
+    "contacts": [
+        "проживает",
+        "гражданство",
+        "готова к переезду",
+        "готов к переезду",
+        "location",
+        "email",
+        "e-mail",
+        "телефон",
+    ],
+}
+
+
+INLINE_SECTION_BREAKS = [
+    "Цель",
+    "Должность",
+    "Общие сведения",
+    "Опыт работы",
+    "Профессиональные навыки",
+    "Навыки",
+    "Образование",
+    "Тренинги, сертификаты",
+    "Проекты",
+    "О себе",
+    "Обо мне",
+]
+
+
+INDUSTRY_RULES = [
+    (
+        r"\b(cfo|finance director|head of finance|финанс(ы|овый|ов)\b|казначейств|бюджетирован|"
+        r"корпоративн(ые|ый)? финанс|управленческ(ий|ая) учет|ifrs|gaap|fp&a|controlling)\b",
+        "Финансы",
+    ),
+    (
+        r"\b(hr|hrd|human resources|talent acquisition|recruit|подбор персонала|обучение персонала|"
+        r"организационн(ое|ая) развитие|компенсаци|льготы|c&b)\b",
+        "Управление персоналом",
+    ),
+    (
+        r"\b(sales|b2b|b2c|коммерческ(ий|ая) директор|директор по продажам|продаж[аи]|business development|"
+        r"развитие бизнеса|key account|аккаунт)\b",
+        "Продажи / Развитие бизнеса",
+    ),
+    (
+        r"\b(marketing|бренд|brand|digital marketing|performance marketing|маркетинг|pr\b|пиар|communications?)\b",
+        "Маркетинг / PR / Бренд",
+    ),
+    (
+        r"\b(operations|операционн(ый|ое) директор|операционное управление|coo\b|process improvement|"
+        r"lean|бережлив|оптимизац(ия|ии) процессов)\b",
+        "Операционное управление",
+    ),
+    (
+        r"\b(logistics|supply chain|scm\b|логистик|склад|транспорт|закупк|procurement)\b",
+        "Логистика / Закупки / Supply Chain",
+    ),
+    (
+        r"\b(production|manufacturing|завод|предприятие|производств|главный инженер|технический директор|cto\b)\b",
+        "Производство / Инжиниринг",
+    ),
+    (
+        r"\b(project manager|program manager|руководитель проектов|управление проектами|project management|pmo\b)\b",
+        "Проектное управление",
+    ),
+    (
+        r"\b(product manager|product owner|product director|продукт|цифров(ой|ая|ые)|digital|"
+        r"ai\b|ml\b|llm\b|data science|advanced analytics|bi\b|erp\b|crm\b|разработк|it\b|ии\b)\b",
+        "IT / Digital / Product",
+    ),
+    (
+        r"\b(legal|юрист|правов(ое|ая)|compliance|комплаенс|договорн(ая|ое) работа)\b",
+        "Юриспруденция / Compliance",
+    ),
+    (
+        r"\b(гостеприимств|hotel|hospitality|отел|туризм|travel)\b",
+        "Туризм / Гостеприимство",
+    ),
+    (
+        r"\b(fmcg|retail|ритейл|мерчандайзинг|категорийный менеджер|продукты питания|пищевая)\b",
+        "FMCG / Retail / Пищевая отрасль",
+    ),
+    (
+        r"\b(энергет|электроэнерг|генерац|теплоэнерг|нефтегаз|нефть|газ|добыч)\b",
+        "Энергетика / Нефтегаз",
+    ),
+    (
+        r"\b(pharma|фарма|медици|healthcare|здравоохранен)\b",
+        "Медицина / Фарма",
+    ),
+    (
+        r"\b(construction|девелопмент|строительств|недвижимост|real estate)\b",
+        "Строительство / Девелопмент / Недвижимость",
+    ),
+]
+
+
+GENERIC_KEYWORD_MARKERS = [
+    "стратегия",
+    "управление командой",
+    "руководство командой",
+    "управление проектами",
+    "project management",
+    "бюджетирование",
+    "финансовое моделирование",
+    "переговоры",
+    "развитие бизнеса",
+    "оптимизация процессов",
+    "маркетинг",
+    "продажи",
+    "логистика",
+    "закупки",
+    "hr",
+    "подбор персонала",
+    "обучение персонала",
+    "клиентский опыт",
+    "customer experience",
+    "client experience",
+    "аналитика",
+    "отчетность",
+    "комплаенс",
+    "legal",
+    "production",
+    "manufacturing",
+    "procurement",
+    "supply chain",
+    "fmcg",
+    "retail",
+    "hospitality",
+    "tourism",
+    "operations",
+    "finance",
+    "sales",
+    "marketing",
+    "digital transformation",
+    "цифровая трансформация",
+    "erp",
+    "crm",
+    "1с",
+    "sap",
+    "oracle",
+    "power bi",
+    "tableau",
+    "sql",
+    "python",
+    "ai",
+    "ml",
+    "llm",
+    "agile",
+    "scrum",
+    "jira",
+    "confluence",
+]
+
+
+ROLE_STOP_MARKERS = [
+    "занятость",
+    "график",
+    "опыт работы",
+    "experience",
+    "навыки",
+    "skills",
+    "ключевые результаты",
+    "обо мне",
+    "о себе",
+    "общие сведения",
+    "образование",
+    "education",
+    "гражданство",
+    "проживает",
+    "готова к переезду",
+    "готов к переезду",
+]
+
+
+ROLE_JUNK_MARKERS = [
+    "hyperlink",
+    "&quot",
+    "quot;",
+    "&amp",
+    "amp;",
+    "xml",
+    "http",
+    "https",
+]
+
+
+ROLE_HEADER_ONLY = {
+    "цель",
+    "должность",
+    "желаемая должность",
+    "position",
+    "objective",
+}
+
+
+KEYWORD_STOP_WORDS = {
+    "цель",
+    "должность",
+    "желаемая должность",
+    "position",
+    "objective",
+    "общие сведения",
+}
+
+
+ROLE_CASE_RULES = [
+    (r"\bруководителя\b", "Руководитель"),
+    (r"\bдиректора\b", "Директор"),
+    (r"\bначальника\b", "Начальник"),
+    (r"\bменеджера\b", "Менеджер"),
+    (r"\bконсультанта\b", "Консультант"),
+    (r"\bаналитика\b", "Аналитик"),
+    (r"\bархитектора\b", "Архитектор"),
+    (r"\bразработчика\b", "Разработчик"),
+    (r"\bспециалиста\b", "Специалист"),
+]
+
+
+ROLE_PRIORITY_PATTERNS = [
+    r"\bгенеральный директор\b",
+    r"\bисполнительный директор\b",
+    r"\bоперационный директор\b",
+    r"\bкоммерческий директор\b",
+    r"\bфинансовый директор\b",
+    r"\bтехнический директор\b",
+    r"\bдиректор по\b",
+    r"\bруководитель\b",
+    r"\bhead of\b",
+    r"\bchief\b",
+    r"\bdirector\b",
+    r"\bmanager\b",
+]
+
+
+def _preclean_text(text: str) -> str:
+    text = html.unescape(text or "")
+    text = text.replace("\xa0", " ")
+    text = text.replace("\ufeff", " ")
+    text = text.replace("ё", "е")
+
+    replacements = [
+        ("HYPERLINK", " "),
+        ("hyperlink", " "),
+        ("&quot;", " "),
+        ("quot;", " "),
+        ("&amp;", " "),
+        ("amp;", " "),
+        ("&#34;", " "),
+        ("&#39;", " "),
+    ]
+    for old, new in replacements:
+        text = text.replace(old, new)
+
+    text = re.sub(r"https?://\S+", " ", text, flags=re.I)
+    text = re.sub(r"www\.\S+", " ", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    return text
+
+
+def _inject_inline_section_breaks(text: str) -> str:
+    text = text or ""
+    for marker in INLINE_SECTION_BREAKS:
+        text = re.sub(rf"\s+({re.escape(marker)})\s+", rf"\n\1 ", text, flags=re.I)
+    return text
+
+
+def _clean_text(text: str) -> str:
+    text = _preclean_text(text)
+    text = _inject_inline_section_breaks(text)
+    text = text.replace("\r", "\n")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"[ ]{2,}", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _clean_value(value: str, max_len: int = 255) -> str:
+    value = _preclean_text(value)
+    value = " ".join((value or "").split()).strip(" ,;.-")
+    if len(value) > max_len:
+        value = value[:max_len].rstrip(" ,;.-")
+    return value
+
+
+def _split_lines(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def _find_section_indices(lines: list[str]) -> list[tuple[int, str]]:
+    found = []
+
+    for idx, line in enumerate(lines):
+        lower_line = line.lower()
+        for section_name, markers in SECTION_HEADERS.items():
+            if any(marker in lower_line for marker in markers):
+                found.append((idx, section_name))
+                break
+
+    unique = []
+    used = set()
+    for idx, section_name in found:
+        key = (idx, section_name)
+        if key not in used:
+            used.add(key)
+            unique.append((idx, section_name))
+
+    unique.sort(key=lambda item: item[0])
+    return unique
+
+
+def split_resume_sections(text: str) -> dict:
+    text = _clean_text(text)
+    lines = _split_lines(text)
+
+    sections = {
+        "raw_text": text,
+        "contacts": "",
+        "target": "",
+        "summary": "",
+        "experience": "",
+        "education": "",
+        "skills": "",
+    }
+
+    if not lines:
+        return sections
+
+    indices = _find_section_indices(lines)
+
+    if indices:
+        for pos, (start_idx, section_name) in enumerate(indices):
+            end_idx = len(lines)
+            if pos + 1 < len(indices):
+                end_idx = indices[pos + 1][0]
+
+            block = "\n".join(lines[start_idx:end_idx]).strip()
+            if block and not sections.get(section_name):
+                sections[section_name] = block
+
+    top_chunk = "\n".join(lines[:8]).strip()
+    if not sections["contacts"]:
+        sections["contacts"] = top_chunk
+
+    if not sections["target"]:
+        match = re.search(
+            r"(?:\bцель\b\s*)?(?:\bдолжность\b\s+)(.+?)(?=\bобщие сведения\b|\bо себе\b|\bопыт работы\b|\bнавыки\b|\bпрофессиональные навыки\b|$)",
+            text,
+            flags=re.I | re.S,
+        )
+        if match:
+            sections["target"] = _clean_value(match.group(1), 300)
+
+    return sections
+
+
+def _extract_email(text: str) -> str:
+    matches = re.findall(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", text or "", flags=re.I)
+    if not matches:
+        return ""
+
+    cleaned = []
+    for item in matches:
+        value = item.strip().lower()
+        local = value.split("@", 1)[0]
+        if value.startswith("."):
+            continue
+        if len(local.replace(".", "").replace("-", "").replace("_", "")) < 3:
+            continue
+        cleaned.append(value)
+
+    if cleaned:
+        return cleaned[-1]
+
+    return matches[-1].strip().lower()
+
+
+def _extract_location(text: str) -> str:
+    match = re.search(r"проживает\s*:\s*([^\n]{2,80})", text or "", flags=re.I)
+    if match:
+        return _clean_value(match.group(1), 80)
+
+    fallback = re.search(
+        r"\b(Москва|Санкт-Петербург|Петербург|Казань|Екатеринбург|Новосибирск|Краснодар|Нижний Новгород|Самара|Ростов-на-Дону|Калининград|Минск|Алматы|Ташкент|Тбилиси|Dubai|Abu Dhabi|Berlin|Frankfurt|Munich|Remote)\b",
+        text or "",
+        flags=re.I,
+    )
+    return fallback.group(1) if fallback else ""
+
+
+def _trim_role_noise(value: str) -> str:
+    value = _clean_value(value, 300)
+    if not value:
+        return ""
+
+    value = re.sub(r"^[\d\-\s]{4,}", "", value).strip(" ,;.-")
+    value = re.sub(r"\bHYPERLINK\b.*$", "", value, flags=re.I)
+    value = re.sub(r"&quot.*$", "", value, flags=re.I)
+    value = re.sub(r"\bquot;.*$", "", value, flags=re.I)
+    value = re.sub(r"^(?:цель|должность|желаемая должность)\b[:\s\-]*", "", value, flags=re.I).strip(" ,;.-")
+
+    lowered = value.lower()
+
+    for marker in ROLE_STOP_MARKERS:
+        idx = lowered.find(marker)
+        if idx > 0:
+            value = value[:idx].strip(" ,;.-")
+            lowered = value.lower()
+
+    value = re.split(
+        r"\b(?:Занятость|График|Опыт работы|Навыки|Ключевые результаты|Образование|Общие сведения)\b",
+        value,
+        maxsplit=1,
+        flags=re.I,
+    )[0].strip(" ,;.-")
+
+    value = re.sub(r"\s+", " ", value).strip(" ,;.-")
+    return value
+
+
+def _normalize_role_case(value: str) -> str:
+    value = _trim_role_noise(value)
+    if not value:
+        return ""
+
+    for pattern, replacement in ROLE_CASE_RULES:
+        if re.search(pattern, value, flags=re.I):
+            value = re.sub(pattern, replacement, value, flags=re.I, count=1)
+            break
+
+    if value:
+        value = value[0].upper() + value[1:]
+
+    return value.strip()
+
+
+def _looks_like_valid_role(value: str) -> bool:
+    cleaned = _trim_role_noise(value)
+    if not cleaned:
+        return False
+
+    lower = cleaned.lower()
+
+    if lower in ROLE_HEADER_ONLY:
+        return False
+
+    if len(cleaned) < 3 or len(cleaned) > 160:
+        return False
+
+    if any(marker in lower for marker in ROLE_STOP_MARKERS):
+        return False
+
+    if any(marker in lower for marker in ROLE_JUNK_MARKERS):
+        return False
+
+    if re.search(r"\d{4,}", cleaned):
+        return False
+
+    return True
+
+
+def _split_role_candidates(value: str) -> list[str]:
+    value = _trim_role_noise(value)
+    if not value:
+        return []
+
+    parts = re.split(r"\s*/\s*|\s+\|\s+|\s*;\s*", value)
+    candidates = []
+
+    for part in parts:
+        candidate = _normalize_role_case(part)
+        if candidate and _looks_like_valid_role(candidate):
+            candidates.append(candidate)
+
+    unique = []
+    seen = set()
+    for item in candidates:
+        key = item.lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+
+    return unique
+
+
+def _score_role_candidate(candidate: str, summary_text: str) -> int:
+    score = 0
+    text = (candidate or "").lower()
+    summary = (summary_text or "").lower()
+
+    for pattern in ROLE_PRIORITY_PATTERNS:
+        if re.search(pattern, text, flags=re.I):
+            score += 3
+            break
+
+    if len(text) <= 60:
+        score += 1
+
+    for marker in ["директор", "руководитель", "head", "chief", "manager"]:
+        if marker in text and marker in summary:
+            score += 2
+
+    return score
+
+
+def _choose_best_role(candidates: list[str], summary_text: str) -> str:
+    if not candidates:
+        return ""
+
+    ranked = sorted(
+        candidates,
+        key=lambda item: (_score_role_candidate(item, summary_text), -len(item)),
+        reverse=True,
+    )
+    return ranked[0]
+
+
+def _extract_position_from_target_section(target_text: str, full_text: str, summary_text: str = "") -> str:
+    source = target_text or full_text or ""
+
+    patterns = [
+        r"желаемая должность и зарплата\s+([^\n]{2,300})",
+        r"желаемая должность\s*[:\-]?\s*([^\n]{2,300})",
+        r"\bцель\b\s*(?:\bдолжность\b\s+)([^\n]{2,300})",
+        r"\bдолжность\b\s+([^\n]{2,300})",
+        r"position\s*[:\-]?\s*([^\n]{2,300})",
+        r"objective\s*[:\-]?\s*([^\n]{2,300})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, source, flags=re.I)
+        if match:
+            candidates = _split_role_candidates(match.group(1))
+            chosen = _choose_best_role(candidates, summary_text)
+            if chosen:
+                return chosen
+
+    lines = _split_lines(source)
+
+    for line in lines[:10]:
+        lower_line = line.lower()
+
+        if lower_line in ROLE_HEADER_ONLY:
+            continue
+
+        if any(marker in lower_line for marker in ["желаемая должность", "зарплата", "занятость", "график"]):
+            continue
+
+        candidates = _split_role_candidates(line)
+        chosen = _choose_best_role(candidates, summary_text)
+        if chosen:
+            return chosen
+
+    return ""
+
+
+def _extract_employment_type(text: str) -> str:
+    lower = (text or "").lower()
+    if "полная занятость" in lower:
+        return "full"
+    if "частичная занятость" in lower:
+        return "part"
+    if "проектная работа" in lower:
+        return "project"
+    return ""
+
+
+def _extract_work_format(text: str) -> str:
+    lower = (text or "").lower()
+
+    found = []
+    if "удален" in lower or "удаленн" in lower or "remote" in lower:
+        found.append("remote")
+    if "гибрид" in lower:
+        found.append("hybrid")
+    if "офис" in lower or "на месте работодателя" in lower:
+        found.append("office")
+    if "разъезд" in lower:
+        found.append("travel")
+
+    if len(found) == 1:
+        return found[0]
+    if len(found) > 1:
+        return "hybrid"
+    return ""
+
+
+def _extract_salary(text: str) -> str:
+    match = re.search(
+        r"(?:зарплат[аы]|доход|ожидани[ея]|expectation|salary)[^0-9]{0,20}(\d{2,7})",
+        text or "",
+        flags=re.I,
+    )
+    if match:
+        return match.group(1)
+
+    match = re.search(r"(\d{2,7})\s*(?:руб|₽)", text or "", flags=re.I)
+    return match.group(1) if match else ""
+
+
+def _detect_industry(sections: dict) -> str:
+    combined = "\n".join([
+        sections.get("target", ""),
+        sections.get("summary", ""),
+        sections.get("experience", ""),
+        sections.get("skills", ""),
+    ]).lower()
+
+    scored = []
+    for pattern, label in INDUSTRY_RULES:
+        hits = re.findall(pattern, combined, flags=re.I)
+        if hits:
+            scored.append((len(hits), label))
+
+    if not scored:
+        return ""
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return scored[0][1]
+
+
+def _extract_keywords(sections: dict, position: str, industry: str) -> str:
+    combined = "\n".join([
+        sections.get("summary", ""),
+        sections.get("skills", ""),
+        sections.get("experience", ""),
+        sections.get("target", ""),
+    ]).lower()
+
+    found: list[str] = []
+
+    industry_to_keywords = {
+        "Финансы": ["финансы", "бюджетирование", "отчетность", "управленческий учет", "fp&a", "ifrs"],
+        "Управление персоналом": ["hr", "подбор персонала", "обучение персонала", "организационное развитие"],
+        "Продажи / Развитие бизнеса": ["продажи", "развитие бизнеса", "b2b", "key account", "переговоры"],
+        "Маркетинг / PR / Бренд": ["маркетинг", "бренд", "pr", "коммуникации"],
+        "Операционное управление": ["операционное управление", "оптимизация процессов", "lean"],
+        "Логистика / Закупки / Supply Chain": ["логистика", "закупки", "supply chain", "scm"],
+        "Производство / Инжиниринг": ["производство", "инжиниринг", "техническое управление"],
+        "Проектное управление": ["управление проектами", "project management", "pmo"],
+        "IT / Digital / Product": ["digital", "product", "erp", "crm", "ai"],
+        "Юриспруденция / Compliance": ["legal", "compliance", "договорная работа"],
+        "Туризм / Гостеприимство": ["туризм", "hospitality", "service"],
+        "FMCG / Retail / Пищевая отрасль": ["fmcg", "retail", "категорийный менеджмент"],
+        "Энергетика / Нефтегаз": ["энергетика", "нефтегаз", "производство"],
+        "Медицина / Фарма": ["медицина", "фарма", "healthcare"],
+        "Строительство / Девелопмент / Недвижимость": ["строительство", "девелопмент", "недвижимость"],
+    }
+
+    if industry and industry in industry_to_keywords:
+        for item in industry_to_keywords[industry]:
+            if item not in found:
+                found.append(item)
+
+    for marker in GENERIC_KEYWORD_MARKERS:
+        if marker in combined and marker not in found:
+            found.append(marker)
+
+    if position:
+        lower_position = position.lower()
+        if "директор" in lower_position and "управление" not in found:
+            found.append("управление")
+        if "руководитель" in lower_position and "руководство командой" not in found:
+            found.append("руководство командой")
+
+    cleaned = []
+    seen = set()
+    for item in found:
+        value = _clean_value(item, 80).lower()
+        if not value:
+            continue
+        if value in KEYWORD_STOP_WORDS:
+            continue
+        if any(bad in value for bad in ROLE_JUNK_MARKERS):
+            continue
+        if re.search(r"\d{4,}", value):
+            continue
+        if value in seen:
+            continue
+        seen.add(value)
+        cleaned.append(value)
+
+    return ", ".join(cleaned[:8])
+
+
+def map_resume_to_form_data(text: str) -> dict:
+    cleaned_text = _clean_text(text)
+    sections = split_resume_sections(cleaned_text)
+
+    contacts_source = "\n".join([
+        sections.get("contacts", ""),
+        cleaned_text[:1200],
+    ])
+
+    target_source = sections.get("target", "")
+    summary_source = sections.get("summary", "")
+    top_source = "\n".join([
+        sections.get("target", ""),
+        sections.get("summary", ""),
+        cleaned_text[:1500],
+    ])
+
+    position = _extract_position_from_target_section(target_source, top_source, summary_source)
+    email = _extract_email(contacts_source)
+    location = _extract_location(contacts_source)
+    salary_min = _extract_salary(target_source or cleaned_text[:1200])
+    employment_type = _extract_employment_type(target_source or cleaned_text[:1200])
+    work_format = _extract_work_format(target_source or cleaned_text[:1200])
+    industry = _detect_industry(sections)
+    keywords = _extract_keywords(sections, position, industry)
+
+    lower = cleaned_text.lower()
+    remote = (
+        work_format == "remote"
+        or "remote" in lower
+        or "удален" in lower
+        or "удаленн" in lower
+    )
+
+    return {
+        "email": email,
+        "query_text": industry,
+        "position": position,
+        "keywords": keywords,
+        "location": location,
+        "salary_min": salary_min,
+        "salary_max": "",
+        "employment_type": employment_type,
+        "work_format": work_format,
+        "display_period": "",
+        "sort_order": "",
+        "vacancy_source": "",
+        "remote": remote,
+        "debug_sections": sections,
+    }

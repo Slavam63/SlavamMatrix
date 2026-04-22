@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Парсинг вакансий — Matrix Parser</title>
+
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+
+    {% set request_id = job_request_id if job_request_id is defined else (job_request.id if job_request is defined and job_request else 0) %}
+
+    <style>
+        :root {
+            --bg: #05070b;
+            --panel: rgba(10, 16, 24, 0.88);
+            --panel-strong: rgba(12, 21, 30, 0.96);
+            --line: rgba(103, 232, 249, 0.18);
+            --line-strong: rgba(103, 232, 249, 0.45);
+            --text: #e6f7ff;
+            --muted: #95a9b8;
+            --accent: #67e8f9;
+            --accent-2: #22d3ee;
+            --success: #4ade80;
+            --warning: #fbbf24;
+            --danger: #fb7185;
+            --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+            --radius: 18px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100%;
+            font-family: Inter, Arial, Helvetica, sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top, rgba(34, 211, 238, 0.12), transparent 35%),
+                radial-gradient(circle at bottom, rgba(74, 222, 128, 0.08), transparent 30%),
+                linear-gradient(180deg, #04060a 0%, #07111a 100%);
+        }
+
+        body {
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(103, 232, 249, 0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(103, 232, 249, 0.035) 1px, transparent 1px);
+            background-size: 32px 32px;
+            pointer-events: none;
+            opacity: 0.35;
+        }
+
+        .page {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            padding: 32px 18px 40px;
+        }
+
+        .shell {
+            width: 100%;
+            max-width: 1120px;
+            margin: 0 auto;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 14px;
+        }
+
+        .sound-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            height: 42px;
+            padding: 0 14px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: rgba(8, 14, 20, 0.75);
+            color: var(--text);
+            cursor: pointer;
+            transition: 0.2s ease;
+            box-shadow: var(--shadow);
+        }
+
+        .sound-toggle:hover {
+            border-color: var(--line-strong);
+            transform: translateY(-1px);
+        }
+
+        .hero-card,
+        .panel {
+            position: relative;
+            background: linear-gradient(180deg, var(--panel) 0%, var(--panel-strong) 100%);
+            border: 1px solid var(--line);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .hero-card::before,
+        .panel::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(135deg, rgba(103, 232, 249, 0.08), transparent 38%),
+                linear-gradient(315deg, rgba(74, 222, 128, 0.06), transparent 28%);
+            pointer-events: none;
+        }
+
+        .hero-content,
+        .panel-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-content {
+            padding: 34px 34px 28px;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 14px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(103, 232, 249, 0.18);
+            background: rgba(103, 232, 249, 0.08);
+            color: var(--accent);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+
+        .pulse {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 0 rgba(74, 222, 128, 0.6);
+            animation: pulse 1.8s infinite;
+        }
+
+        h1 {
+            margin: 0 0 12px;
+            font-size: clamp(30px, 5vw, 48px);
+            line-height: 1.08;
+            font-weight: 800;
+        }
+
+        .lead {
+            max-width: 760px;
+            margin: 0 0 24px;
+            font-size: 17px;
+            line-height: 1.6;
+            color: var(--muted);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .stat-box {
+            padding: 18px;
+            border-radius: var(--radius);
+            border: 1px solid rgba(103, 232, 249, 0.14);
+            background: rgba(7, 14, 21, 0.72);
+        }
+
+        .stat-label {
+            margin-bottom: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+
+        .stat-value {
+            font-size: clamp(22px, 3vw, 32px);
+            font-weight: 800;
+            line-height: 1.15;
+        }
+
+        .stat-value.small {
+            font-size: 17px;
+            font-weight: 700;
+        }
+
+        .progress-wrap {
+            padding: 20px;
+            border-radius: 22px;
+            border: 1px solid rgba(103, 232, 249, 0.16);
+            background: rgba(7, 14, 21, 0.82);
+        }
+
+        .progress-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .progress-title {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .progress-percent {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--accent);
+        }
+
+        .progress-track {
+            position: relative;
+            width: 100%;
+            height: 16px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: rgba(148, 163, 184, 0.16);
+            border: 1px solid rgba(103, 232, 249, 0.12);
+        }
+
+        .progress-bar {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 0%;
+            border-radius: 999px;
+            background:
+                linear-gradient(90deg, rgba(34, 211, 238, 0.92), rgba(103, 232, 249, 0.96)),
+                linear-gradient(90deg, rgba(74, 222, 128, 0.25), rgba(74, 222, 128, 0.25));
+            box-shadow: 0 0 24px rgba(34, 211, 238, 0.38);
+            transition: width 0.45s ease;
+        }
+
+        .progress-note {
+            margin-top: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--muted);
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+            gap: 18px;
+            margin-top: 18px;
+        }
+
+        .panel-content {
+            padding: 24px;
+        }
+
+        .panel-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+
+        .panel-title h2 {
+            margin: 0;
+            font-size: 24px;
+            line-height: 1.2;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 32px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(103, 232, 249, 0.1);
+            border: 1px solid rgba(103, 232, 249, 0.18);
+            color: var(--accent);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .vacancy-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .vacancy-empty {
+            padding: 22px;
+            border-radius: var(--radius);
+            border: 1px dashed rgba(103, 232, 249, 0.18);
+            background: rgba(7, 14, 21, 0.55);
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        details.vacancy-card {
+            border-radius: 18px;
+            border: 1px solid rgba(103, 232, 249, 0.14);
+            background: rgba(7, 14, 21, 0.72);
+            overflow: hidden;
+        }
+
+        details.vacancy-card[open] {
+            border-color: rgba(103, 232, 249, 0.28);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+        }
+
+        .vacancy-summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 16px 18px;
+        }
+
+        .vacancy-summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .vacancy-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px;
+        }
+
+        .vacancy-title-block {
+            min-width: 0;
+        }
+
+        .vacancy-title {
+            margin: 0 0 6px;
+            font-size: 18px;
+            font-weight: 800;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+
+        .vacancy-company {
+            font-size: 15px;
+            color: var(--muted);
+            word-break: break-word;
+        }
+
+        .vacancy-meta {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .meta-chip {
+            display: inline-flex;
+            align-items: center;
+            min-height: 28px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(103, 232, 249, 0.14);
+            background: rgba(103, 232, 249, 0.08);
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .vacancy-body {
+            padding: 0 18px 18px;
+            color: var(--muted);
+            line-height: 1.65;
+        }
+
+        .vacancy-body p {
+            margin: 0 0 12px;
+        }
+
+        .vacancy-body p:last-child {
+            margin-bottom: 0;
+        }
+
+        .vacancy-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 42px;
+            padding: 0 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(103, 232, 249, 0.2);
+            background: rgba(8, 14, 20, 0.92);
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 700;
+            transition: 0.2s ease;
+        }
+
+        .vacancy-link:hover {
+            transform: translateY(-1px);
+            border-color: var(--line-strong);
+        }
+
+        .activity-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .activity-item {
+            padding: 16px 18px;
+            border-radius: 16px;
+            border: 1px solid rgba(103, 232, 249, 0.14);
+            background: rgba(7, 14, 21, 0.72);
+        }
+
+        .activity-item strong {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 16px;
+            color: var(--text);
+        }
+
+        .activity-item span {
+            color: var(--muted);
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        .finish-box {
+            margin-top: 16px;
+            padding: 18px;
+            border-radius: 18px;
+            border: 1px solid rgba(74, 222, 128, 0.2);
+            background: rgba(34, 197, 94, 0.08);
+        }
+
+        .finish-box strong {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 18px;
+            color: var(--success);
+        }
+
+        .finish-box span {
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .hidden-video {
+            position: fixed;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+            left: -9999px;
+            top: -9999px;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.55);
+            }
+            70% {
+                transform: scale(1);
+                box-shadow: 0 0 0 14px rgba(74, 222, 128, 0);
+            }
+            100% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+            }
+        }
+
+        @media (max-width: 980px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .page {
+                padding: 20px 12px 30px;
+            }
+
+            .hero-content,
+            .panel-content {
+                padding: 22px 18px;
+            }
+
+            .lead {
+                font-size: 16px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .sound-toggle {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .vacancy-top {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <video
+        id="matrixMusic"
+        class="hidden-video"
+        autoplay
+        loop
+        playsinline
+        preload="auto"
+    >
+        <source src="{{ url_for('static', filename='matrix-theme.mp4') }}" type="video/mp4">
+    </video>
+
+    <div class="page">
+        <div class="shell" id="pageRoot" data-request-id="{{ request_id }}">
+            <div class="topbar">
+                <button type="button" class="sound-toggle" id="soundToggle">
+                    <span id="soundToggleIcon">🔊</span>
+                    <span id="soundToggleText">Звук включён</span>
+                </button>
+            </div>
+
+            <section class="hero-card">
+                <div class="hero-content">
+                    <div class="eyebrow">
+                        <span class="pulse"></span>
+                        <span>Окно парсинга</span>
+                    </div>
+
+                    <h1>Парсинг вакансий</h1>
+
+                    <p class="lead">
+                        Система сейчас обрабатывает ваш запрос, получает вакансии и собирает результаты.
+                        Прогресс и найденные позиции обновляются автоматически в реальном времени.
+                    </p>
+
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-label">Статус</div>
+                            <div class="stat-value small" id="statusValue">Подготовка к запуску</div>
+                        </div>
+
+                        <div class="stat-box">
+                            <div class="stat-label">Прогресс</div>
+                            <div class="stat-value" id="progressValue">0%</div>
+                        </div>
+
+                        <div class="stat-box">
+                            <div class="stat-label">Найдено вакансий</div>
+                            <div class="stat-value" id="foundValue">0</div>
+                        </div>
+
+                        <div class="stat-box">
+                            <div class="stat-label">Заявка</div>
+                            <div class="stat-value small" id="requestValue">#{{ request_id }}</div>
+                        </div>
+                    </div>
+
+                    <div class="progress-wrap">
+                        <div class="progress-top">
+                            <div class="progress-title" id="progressTitle">Идёт обработка данных</div>
+                            <div class="progress-percent" id="progressPercent">0%</div>
+                        </div>
+
+                        <div class="progress-track" aria-hidden="true">
+                            <div class="progress-bar" id="progressBar"></div>
+                        </div>
+
+                        <div class="progress-note" id="progressNote">
+                            Как только сбор будет завершён, страница автоматически откроет результат парсинга.
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="main-grid">
+                <section class="panel">
+                    <div class="panel-content">
+                        <div class="panel-title">
+                            <h2>Найденные вакансии</h2>
+                            <div class="badge" id="vacancyBadge">0 позиций</div>
+                        </div>
+
+                        <div class="vacancy-list" id="vacancyList">
+                            <div class="vacancy-empty" id="vacancyEmpty">
+                                Пока вакансии ещё не отображаются. Как только они начнут поступать, они появятся здесь автоматически.
+                            </div>
+                        </div>
+
+                        <div class="finish-box" id="finishBox" style="display: none;">
+                            <strong>Парсинг завершён</strong>
+                            <span id="finishText">Подготавливаем автоматический переход на страницу результата.</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-content">
+                        <div class="panel-title">
+                            <h2>Ход обработки</h2>
+                            <div class="badge">Live</div>
+                        </div>
+
+                        <div class="activity-list">
+                            <div class="activity-item">
+                                <strong>1. Запуск процесса</strong>
+                                <span id="activityLaunch">Ожидаем подтверждение запуска задачи.</span>
+                            </div>
+
+                            <div class="activity-item">
+                                <strong>2. Сбор вакансий</strong>
+                                <span id="activityCollect">Система начинает поиск по заданным параметрам.</span>
+                            </div>
+
+                            <div class="activity-item">
+                                <strong>3. Подготовка результата</strong>
+                                <span id="activityFinalize">После завершения откроется итоговая страница с результатами.</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const root = document.getElementById('pageRoot');
+            const requestId = root.dataset.requestId;
+
+            const progressValue = document.getElementById('progressValue');
+            const progressPercent = document.getElementById('progressPercent');
+            const progressBar = document.getElementById('progressBar');
+            const progressTitle = document.getElementById('progressTitle');
+            const progressNote = document.getElementById('progressNote');
+
+            const statusValue = document.getElementById('statusValue');
+            const foundValue = document.getElementById('foundValue');
+            const vacancyBadge = document.getElementById('vacancyBadge');
+            const vacancyList = document.getElementById('vacancyList');
+            const vacancyEmpty = document.getElementById('vacancyEmpty');
+
+            const finishBox = document.getElementById('finishBox');
+            const finishText = document.getElementById('finishText');
+
+            const activityLaunch = document.getElementById('activityLaunch');
+            const activityCollect = document.getElementById('activityCollect');
+            const activityFinalize = document.getElementById('activityFinalize');
+
+            const music = document.getElementById('matrixMusic');
+            const soundToggle = document.getElementById('soundToggle');
+            const soundToggleIcon = document.getElementById('soundToggleIcon');
+            const soundToggleText = document.getElementById('soundToggleText');
+
+            let audioEnabled = true;
+            let audioContext = null;
+            let redirected = false;
+            let statusPollTimer = null;
+            let vacanciesPollTimer = null;
+            let latestVacanciesSignature = '';
+
+            function ensureAudioContext() {
+                if (!audioContext) {
+                    const Ctx = window.AudioContext || window.webkitAudioContext;
+                    if (Ctx) {
+                        audioContext = new Ctx();
+                    }
+                }
+                return audioContext;
+            }
+
+            function playClickSound() {
+                if (!audioEnabled) {
+                    return;
+                }
+
+                const ctx = ensureAudioContext();
+                if (!ctx) {
+                    return;
+                }
+
+                if (ctx.state === 'suspended') {
+                    ctx.resume().catch(() => {});
+                }
+
+                const oscillator = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+
+                oscillator.type = 'triangle';
+                oscillator.frequency.setValueAtTime(720, ctx.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(420, ctx.currentTime + 0.08);
+
+                gainNode.gain.setValueAtTime(0.0001, ctx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.09, ctx.currentTime + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.11);
+
+                oscillator.connect(gainNode);
+                gainNode.connect(ctx.destination);
+
+                oscillator.start();
+                oscillator.stop(ctx.currentTime + 0.12);
+            }
+
+            function syncSoundButton() {
+                soundToggleIcon.textContent = audioEnabled ? '🔊' : '🔇';
+                soundToggleText.textContent = audioEnabled ? 'Звук включён' : 'Звук выключен';
+            }
+
+            function tryStartMusic() {
+                if (!music) {
+                    return;
+                }
+
+                music.muted = !audioEnabled;
+
+                if (audioEnabled) {
+                    const playPromise = music.play();
+                    if (playPromise && typeof playPromise.catch === 'function') {
+                        playPromise.catch(() => {});
+                    }
+                } else {
+                    music.pause();
+                }
+            }
+
+            soundToggle.addEventListener('click', function () {
+                playClickSound();
+                audioEnabled = !audioEnabled;
+                syncSoundButton();
+                tryStartMusic();
+            });
+
+            ['click', 'keydown', 'touchstart'].forEach(function (eventName) {
+                window.addEventListener(eventName, function bootstrapAudio() {
+                    tryStartMusic();
+                    const ctx = ensureAudioContext();
+                    if (ctx && ctx.state === 'suspended') {
+                        ctx.resume().catch(() => {});
+                    }
+                    window.removeEventListener(eventName, bootstrapAudio);
+                }, { once: true });
+            });
+
+            syncSoundButton();
+            tryStartMusic();
+
+            function clampProgress(value) {
+                const num = Number(value);
+                if (!Number.isFinite(num)) {
+                    return 0;
+                }
+                return Math.max(0, Math.min(100, Math.round(num)));
+            }
+
+            function normalizeStatus(rawStatus, rawTaskStatus) {
+                const joined = `${String(rawStatus || '').toLowerCase()} ${String(rawTaskStatus || '').toLowerCase()}`;
+
+                if (joined.includes('completed') || joined.includes('done') || joined.includes('success')) {
+                    return 'completed';
+                }
+                if (joined.includes('running') || joined.includes('started') || joined.includes('processing') || joined.includes('parsing')) {
+                    return 'running';
+                }
+                if (joined.includes('queued') || joined.includes('waiting') || joined.includes('pending')) {
+                    return 'queued';
+                }
+                if (joined.includes('error') || joined.includes('failed') || joined.includes('failure')) {
+                    return 'failed';
+                }
+
+                return 'unknown';
+            }
+
+            function applyProgress(progress) {
+                const safeProgress = clampProgress(progress);
+                progressValue.textContent = `${safeProgress}%`;
+                progressPercent.textContent = `${safeProgress}%`;
+                progressBar.style.width = `${safeProgress}%`;
+
+                if (safeProgress >= 100) {
+                    progressTitle.textContent = 'Сбор вакансий завершён';
+                } else if (safeProgress >= 70) {
+                    progressTitle.textContent = 'Формируем итоговый результат';
+                } else if (safeProgress >= 30) {
+                    progressTitle.textContent = 'Идёт активный сбор вакансий';
+                } else {
+                    progressTitle.textContent = 'Идёт обработка данных';
+                }
+            }
+
+            function goToResults() {
+                if (redirected) {
+                    return;
+                }
+                redirected = true;
+                setTimeout(function () {
+                    window.location.href = `/job-results/${requestId}`;
+                }, 1400);
+            }
+
+            function formatDate(value) {
+                if (!value) {
+                    return '';
+                }
+
+                const parsed = new Date(value);
+                if (Number.isNaN(parsed.getTime())) {
+                    return '';
+                }
+
+                try {
+                    return parsed.toLocaleString('ru-RU', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                } catch (error) {
+                    return '';
+                }
+            }
+
+            function escapeHtml(value) {
+                return String(value || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function shorten(text, maxLength) {
+                const safe = String(text || '').trim();
+                if (!safe) {
+                    return '';
+                }
+                if (safe.length <= maxLength) {
+                    return safe;
+                }
+                return `${safe.slice(0, maxLength).trim()}…`;
+            }
+
+            function getVacancyTitle(item, index) {
+                return item.title || item.position || item.vacancy_name || item.name || `Вакансия ${index + 1}`;
+            }
+
+            function getVacancyCompany(item) {
+                return item.company || item.company_name || item.employer || item.organization || 'Компания не указана';
+            }
+
+            function getVacancyUrl(item) {
+                return item.url || item.link || item.vacancy_url || item.source_url || '';
+            }
+
+            function getVacancyDescription(item) {
+                return item.description || item.summary || item.ai_summary || item.snippet || item.requirements || '';
+            }
+
+            function getVacancyLocation(item) {
+                return item.location || item.city || item.region || '';
+            }
+
+            function getVacancySalary(item) {
+                return item.salary || item.salary_text || item.compensation || '';
+            }
+
+            function getVacancySource(item) {
+                return item.source || item.vacancy_source || item.platform || '';
+            }
+
+            function getVacancyCreatedAt(item) {
+                return item.created_at || item.published_at || item.date || '';
+            }
+
+            function getVacancyScore(item) {
+                if (item.ai_score === null || item.ai_score === undefined || item.ai_score === '') {
+                    return '';
+                }
+                return `AI score: ${item.ai_score}`;
+            }
+
+            function normalizeVacancies(payload) {
+                if (Array.isArray(payload)) {
+                    return payload;
+                }
+                if (payload && Array.isArray(payload.vacancies)) {
+                    return payload.vacancies;
+                }
+                if (payload && Array.isArray(payload.items)) {
+                    return payload.items;
+                }
+                if (payload && Array.isArray(payload.data)) {
+                    return payload.data;
+                }
+                return [];
+            }
+
+            function buildVacancyCard(item, index) {
+                const title = escapeHtml(getVacancyTitle(item, index));
+                const company = escapeHtml(getVacancyCompany(item));
+                const url = getVacancyUrl(item);
+                const description = escapeHtml(getVacancyDescription(item));
+                const location = escapeHtml(getVacancyLocation(item));
+                const salary = escapeHtml(getVacancySalary(item));
+                const source = escapeHtml(getVacancySource(item));
+                const createdAt = escapeHtml(formatDate(getVacancyCreatedAt(item)));
+                const score = escapeHtml(getVacancyScore(item));
+
+                const meta = [];
+                if (location) {
+                    meta.push(`<span class="meta-chip">${location}</span>`);
+                }
+                if (salary) {
+                    meta.push(`<span class="meta-chip">${salary}</span>`);
+                }
+                if (source) {
+                    meta.push(`<span class="meta-chip">${source}</span>`);
+                }
+                if (score) {
+                    meta.push(`<span class="meta-chip">${score}</span>`);
+                }
+                if (createdAt) {
+                    meta.push(`<span class="meta-chip">${createdAt}</span>`);
+                }
+
+                return `
+                    <details class="vacancy-card">
+                        <summary class="vacancy-summary">
+                            <div class="vacancy-top">
+                                <div class="vacancy-title-block">
+                                    <div class="vacancy-title">${title}</div>
+                                    <div class="vacancy-company">${company}</div>
+                                </div>
+                                <div class="badge">#${index + 1}</div>
+                            </div>
+                            <div class="vacancy-meta">
+                                ${meta.join('')}
+                            </div>
+                        </summary>
+                        <div class="vacancy-body">
+                            ${description ? `<p>${shorten(description, 1800)}</p>` : `<p>Описание вакансии пока недоступно.</p>`}
+                            ${url ? `<a class="vacancy-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Открыть источник вакансии</a>` : ''}
+                        </div>
+                    </details>
+                `;
+            }
+
+            function renderVacancies(vacancies) {
+                const safeVacancies = normalizeVacancies(vacancies);
+                const signature = JSON.stringify(safeVacancies.map(function (item) {
+                    return [
+                        getVacancyTitle(item, 0),
+                        getVacancyCompany(item),
+                        getVacancyUrl(item),
+                        item.created_at || ''
+                    ];
+                }));
+
+                if (signature === latestVacanciesSignature) {
+                    vacancyBadge.textContent = `${safeVacancies.length} позиций`;
+                    foundValue.textContent = String(safeVacancies.length);
+                    return;
+                }
+
+                latestVacanciesSignature = signature;
+                vacancyBadge.textContent = `${safeVacancies.length} ${safeVacancies.length === 1 ? 'позиция' : 'позиций'}`;
+                foundValue.textContent = String(safeVacancies.length);
+
+                if (!safeVacancies.length) {
+                    vacancyEmpty.style.display = '';
+                    vacancyList.innerHTML = '';
+                    vacancyList.appendChild(vacancyEmpty);
+                    return;
+                }
+
+                vacancyList.innerHTML = safeVacancies.map(buildVacancyCard).join('');
+            }
+
+            async function pollVacancies() {
+                try {
+                    const response = await fetch(`/api/v1/vacancies/${requestId}`, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json'
+                        },
+                        cache: 'no-store'
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    renderVacancies(data);
+
+                    const count = normalizeVacancies(data).length;
+                    if (count > 0) {
+                        activityCollect.textContent = `Вакансии уже поступают в окно парсинга. Сейчас отображается: ${count}.`;
+                    }
+                } catch (error) {
+                    // Молча продолжаем polling
+                }
+            }
+
+            async function pollStatus() {
+                try {
+                    const response = await fetch(`/api/v1/status/${requestId}`, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json'
+                        },
+                        cache: 'no-store'
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+
+                    const rawStatus = data.status;
+                    const rawTaskStatus = data.task_status;
+                    const safeStatus = normalizeStatus(rawStatus, rawTaskStatus);
+                    const progress = clampProgress(data.progress);
+                    const foundVacancies = Number(data.found_vacancies || 0);
+
+                    applyProgress(progress);
+
+                    if (Number.isFinite(foundVacancies) && foundVacancies >= 0) {
+                        foundValue.textContent = String(foundVacancies);
+                        vacancyBadge.textContent = `${foundVacancies} ${foundVacancies === 1 ? 'позиция' : 'позиций'}`;
+                    }
+
+                    if (safeStatus === 'queued') {
+                        statusValue.textContent = 'Ожидание запуска';
+                        progressNote.textContent = 'Задача поставлена в очередь. Как только обработка начнётся, прогресс станет живым.';
+                        activityLaunch.textContent = 'Задача зарегистрирована и ожидает начала обработки.';
+                        activityCollect.textContent = 'Сбор вакансий начнётся сразу после фактического запуска задачи.';
+                        activityFinalize.textContent = 'После завершения вы будете автоматически переведены на страницу результата.';
+                    } else if (safeStatus === 'running') {
+                        statusValue.textContent = 'Парсинг выполняется';
+                        progressNote.textContent = 'Парсинг идёт. Прогресс, количество вакансий и список ниже обновляются автоматически.';
+                        activityLaunch.textContent = 'Задача успешно запущена, система активно обрабатывает запрос.';
+                        activityCollect.textContent = foundVacancies > 0
+                            ? `Вакансии уже найдены: ${foundVacancies}. Список обновляется в реальном времени.`
+                            : 'Система выполняет поиск вакансий по заданным параметрам.';
+                        activityFinalize.textContent = 'После окончания сбора система автоматически подготовит итоговую страницу.';
+                    } else if (safeStatus === 'completed') {
+                        statusValue.textContent = 'Парсинг завершён';
+                        applyProgress(100);
+                        progressNote.textContent = 'Сбор завершён. Подготавливаем переход на страницу результата.';
+                        activityLaunch.textContent = 'Задача была успешно запущена и полностью обработана.';
+                        activityCollect.textContent = foundVacancies > 0
+                            ? `Сбор завершён. Найдено вакансий: ${foundVacancies}.`
+                            : 'Сбор завершён. Вакансии обработаны.';
+                        activityFinalize.textContent = 'Открываем итоговую страницу результата.';
+                        finishBox.style.display = '';
+                        finishText.textContent = foundVacancies > 0
+                            ? `Найдено вакансий: ${foundVacancies}. Выполняем автоматический переход на страницу результата.`
+                            : 'Сбор завершён. Выполняем автоматический переход на страницу результата.';
+                        goToResults();
+                    } else if (safeStatus === 'failed') {
+                        statusValue.textContent = 'Ошибка обработки';
+                        progressNote.textContent = 'Во время обработки возникла ошибка. Страница продолжит проверять статус автоматически.';
+                        activityLaunch.textContent = 'Во время выполнения зафиксирована ошибка.';
+                        activityCollect.textContent = 'Если данные доступны, они всё равно будут отображаться ниже.';
+                        activityFinalize.textContent = 'После исправления состояния можно будет перейти к результату.';
+                    } else {
+                        statusValue.textContent = 'Уточняем статус';
+                        progressNote.textContent = 'Система обновляет данные. Пожалуйста, не закрывайте страницу.';
+                    }
+                } catch (error) {
+                    statusValue.textContent = 'Связь обновляется';
+                    progressNote.textContent = 'Повторяем запрос к статусу автоматически.';
+                }
+            }
+
+            pollStatus();
+            pollVacancies();
+
+            statusPollTimer = window.setInterval(pollStatus, 4000);
+            vacanciesPollTimer = window.setInterval(pollVacancies, 5000);
+
+            window.addEventListener('beforeunload', function () {
+                if (statusPollTimer) {
+                    clearInterval(statusPollTimer);
+                }
+                if (vacanciesPollTimer) {
+                    clearInterval(vacanciesPollTimer);
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

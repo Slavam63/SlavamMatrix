@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <title>Матрица — Поиск вакансий</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="256x256" href="/static/favicon.png">
+    <style>
+        :root {
+            --gold-soft: #f9fcba;
+            --gold-dim: rgba(249, 252, 186, 0.82);
+            --border: rgba(249, 252, 186, 0.82);
+            --field-bg: rgba(34, 19, 2, 0.72);
+            --placeholder: rgba(249, 252, 186, 0.48);
+            --hover-green: #145229;
+            --hover-red: #d64040;
+            --button-bg: linear-gradient(180deg, rgba(239, 214, 136, 0.28) 0%, rgba(200, 160, 65, 0.22) 100%);
+            --button-hover-bg: rgba(20, 82, 41, 0.88);
+            --panel-blur: blur(8px);
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            min-height: 100%;
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--gold-soft);
+            background:
+                linear-gradient(rgba(20, 13, 5, 0.42), rgba(20, 13, 5, 0.62)),
+                linear-gradient(180deg, rgba(33, 22, 9, 0.12) 0%, rgba(18, 13, 7, 0.72) 100%),
+                url("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2400&q=100") center center / cover no-repeat fixed;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 50% 16%, rgba(255, 227, 158, 0.18), transparent 28%),
+                linear-gradient(180deg, rgba(13, 9, 5, 0.10) 0%, rgba(13, 9, 5, 0.46) 100%);
+        }
+
+        .page {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            padding: 24px 18px 48px;
+        }
+
+        .logo-box {
+            position: fixed;
+            top: 82px;
+            left: 10px;
+            z-index: 40;
+        }
+
+        .logo-box img {
+            display: block;
+            width: 1000px;
+            height: auto;
+            max-width: 28vw;
+            max-height: 587px;
+            opacity: 0.98;
+            filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.32));
+        }
+
+        .hero-sticky {
+            position: fixed;
+            top: 35px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 38;
+            width: 100%;
+            max-width: 760px;
+            text-align: center;
+            padding: 0 16px;
+        }
+
+        .hero-sticky h1 {
+            margin: 0 0 10px;
+            font-size: 42px;
+            line-height: 1.2;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+        }
+
+        .hero-sticky p {
+            margin: 0;
+            font-size: 28px;
+            line-height: 1.45;
+            color: var(--gold-soft);
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+        }
+
+        .top-right-stack {
+            position: fixed;
+            top: 198px;
+            right: 20px;
+            z-index: 39;
+            width: 430px;
+            max-width: calc(100vw - 40px);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .resume-sticky-box {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+            backdrop-filter: var(--panel-blur);
+            background: rgba(58, 31, 4, 0.66);
+            padding: 14px 16px;
+        }
+
+        .resume-sticky-box label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 16px;
+            line-height: 1.3;
+            color: var(--gold-soft);
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+        }
+
+        .resume-section {
+            border: 1px solid rgba(249, 252, 186, 0.38);
+            border-radius: 10px;
+            padding: 12px 12px 10px;
+            background: rgba(34, 19, 2, 0.24);
+        }
+
+        .resume-section + .resume-section {
+            margin-top: 12px;
+        }
+
+        .resume-section-title {
+            margin: 0 0 8px;
+            font-size: 15px;
+            line-height: 1.3;
+            color: var(--gold-soft);
+        }
+
+        .resume-upload-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .resume-file-trigger,
+        .resume-upload-btn {
+            appearance: none;
+            -webkit-appearance: none;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 40px;
+            min-height: 40px;
+            margin: 0;
+            border: 1px solid rgba(249, 252, 186, 0.85);
+            border-radius: 8px;
+            background: rgba(34, 19, 2, 0.82);
+            color: var(--gold-soft);
+            padding: 0;
+            font-size: 15px;
+            line-height: 1;
+            font-family: Georgia, "Times New Roman", serif;
+            cursor: pointer;
+            text-align: center;
+            vertical-align: middle;
+            white-space: nowrap;
+            transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease, transform 0.14s ease;
+        }
+
+        .resume-file-trigger {
+            position: relative;
+            overflow: hidden;
+            font-size: 0;
+            text-indent: 0;
+        }
+
+        .resume-file-trigger::before {
+            content: "ВЫБРАТЬ ФАЙЛ";
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            display: block;
+            width: max-content;
+            font-size: 15px;
+            line-height: 1;
+            white-space: nowrap;
+            text-align: center;
+        }
+
+        .resume-upload-btn {
+            font-size: 15px;
+        }
+
+        .resume-file-trigger:hover,
+        .resume-upload-btn:hover {
+            background: var(--hover-green);
+            color: var(--hover-red);
+            border-color: var(--hover-red);
+            transform: translateY(-1px);
+        }
+
+        .resume-file-input {
+            display: none;
+        }
+
+        .resume-file-status {
+            margin-top: 8px;
+            font-size: 14px;
+            line-height: 1.35;
+            color: rgba(249, 252, 186, 0.92);
+            word-break: break-word;
+        }
+
+        .file-note {
+            margin-top: 8px;
+            font-size: 15px;
+            line-height: 1.4;
+            color: rgba(249, 252, 186, 0.74);
+        }
+
+        .resume-help {
+            margin-top: 8px;
+            font-size: 15px;
+            line-height: 1.45;
+            color: rgba(249, 252, 186, 0.84);
+        }
+
+        .audio-inline {
+            width: 100%;
+        }
+
+        .audio-toggle {
+            width: 100%;
+            border: 1px solid rgba(249, 252, 186, 0.82);
+            border-radius: 10px;
+            background: rgba(34, 19, 2, 0.82);
+            color: var(--gold-soft);
+            padding: 11px 16px;
+            font-size: 16px;
+            line-height: 1.2;
+            cursor: pointer;
+            backdrop-filter: var(--panel-blur);
+            transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease, transform 0.14s ease;
+        }
+
+        .audio-toggle:hover {
+            background: var(--hover-green);
+            color: var(--hover-red);
+            border-color: var(--hover-red);
+            transform: translateY(-1px);
+        }
+
+        .layout {
+            width: 100%;
+            max-width: 560px;
+            margin: 150px auto 0;
+        }
+
+        .flash-error,
+        .flash-success {
+            margin: 0 0 16px;
+            padding: 13px 15px;
+            border-radius: 12px;
+            font-size: 16px;
+            line-height: 1.5;
+            backdrop-filter: blur(4px);
+            scroll-margin-top: 24px;
+        }
+
+        .flash-error {
+            background: rgba(119, 20, 20, 0.5);
+            border: 1px solid rgba(255, 180, 180, 0.68);
+            color: #ffe4e4;
+        }
+
+        .flash-success {
+            background: rgba(22, 85, 48, 0.46);
+            border: 1px solid rgba(189, 255, 194, 0.55);
+            color: #efffe9;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            scroll-margin-top: 24px;
+        }
+
+        .field label,
+        .group-title {
+            font-size: 16px;
+            line-height: 1.35;
+            color: var(--gold-soft);
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="number"],
+        textarea,
+        select {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--field-bg);
+            color: var(--gold-soft);
+            padding: 13px 15px;
+            font-size: 16px;
+            line-height: 1.4;
+            outline: none;
+            transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+            font-family: Georgia, "Times New Roman", serif;
+        }
+
+        input[type="text"]::placeholder,
+        input[type="email"]::placeholder,
+        input[type="number"]::placeholder,
+        textarea::placeholder {
+            color: var(--placeholder);
+        }
+
+        select {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image:
+                linear-gradient(45deg, transparent 50%, var(--gold-soft) 50%),
+                linear-gradient(135deg, var(--gold-soft) 50%, transparent 50%);
+            background-position:
+                calc(100% - 22px) calc(50% - 3px),
+                calc(100% - 16px) calc(50% - 3px);
+            background-size: 6px 6px, 6px 6px;
+            background-repeat: no-repeat;
+            padding-right: 42px;
+        }
+
+        select option {
+            background: #241404;
+            color: var(--gold-soft);
+        }
+
+        input[type="text"]:focus,
+        input[type="email"]:focus,
+        input[type="number"]:focus,
+        textarea:focus,
+        select:focus {
+            border-color: #fff2ab;
+            box-shadow: 0 0 0 3px rgba(249, 243, 197, 0.12);
+            background-color: rgba(44, 25, 4, 0.88);
+        }
+
+        textarea {
+            min-height: 98px;
+            resize: vertical;
+        }
+
+        .checkbox-group,
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-top: 2px;
+        }
+
+        .option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 24px;
+            font-size: 16px;
+            line-height: 1.4;
+            color: var(--gold-dim);
+            cursor: pointer;
+            transition: color 0.16s ease;
+        }
+
+        .option:hover {
+            color: #C4F881;
+        }
+
+        .option input {
+            width: 18px;
+            height: 18px;
+            margin: 0;
+            flex: 0 0 auto;
+            cursor: pointer;
+            accent-color: #f9fcba;
+        }
+
+        .option:hover input {
+            outline: 1px solid var(--hover-red);
+            outline-offset: 2px;
+            border-radius: 50%;
+        }
+
+        .submit-wrap { padding-top: 6px; }
+
+        .submit-btn {
+            width: 100%;
+            border: 1px solid rgba(249, 252, 186, 0.85);
+            border-radius: 10px;
+            background: var(--button-bg);
+            color: var(--gold-soft);
+            padding: 14px 16px;
+            font-size: 16px;
+            line-height: 1.2;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            cursor: pointer;
+            box-shadow:
+                0 10px 24px rgba(0, 0, 0, 0.22),
+                inset 0 1px 0 rgba(255, 255, 255, 0.12);
+            transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+        }
+
+        .submit-btn:hover {
+            background: var(--button-hover-bg);
+            color: var(--hover-red);
+            border-color: var(--hover-red);
+            transform: translateY(-1px);
+        }
+
+        .submit-btn:active,
+        .audio-toggle:active,
+        .resume-sticky-box input[type="file"]::file-selector-button:active {
+            transform: translateY(1px);
+        }
+
+        .email-note {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 16px;
+            line-height: 1.35;
+            color: rgba(249, 252, 186, 0.84);
+        }
+
+        @media (max-width: 980px) {
+            .top-right-stack {
+                width: 360px;
+            }
+        }
+
+        @media (max-width: 760px) {
+            .logo-box {
+                top: 64px;
+                left: 2px;
+            }
+
+            .logo-box img {
+                width: 1000px;
+                max-width: 48vw;
+                max-height: 587px;
+            }
+
+            .hero-sticky {
+                top: 35px;
+                max-width: 60vw;
+                padding: 0 8px;
+            }
+
+            .hero-sticky h1 {
+                font-size: 24px;
+            }
+
+            .hero-sticky p {
+                font-size: 16px;
+            }
+
+            .top-right-stack {
+                top: 200px;
+                right: 12px;
+                width: calc(100vw - 24px);
+                max-width: calc(100vw - 24px);
+            }
+
+            .resume-upload-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .layout {
+                margin-top: 390px;
+                max-width: 100%;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .page {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                padding: 16px 12px 28px;
+            }
+
+            .logo-box,
+            .hero-sticky,
+            .top-right-stack {
+                position: static;
+                inset: auto;
+                transform: none;
+                width: 100%;
+                max-width: 100%;
+            }
+
+            .logo-box {
+                display: flex;
+                justify-content: center;
+                margin: 0 auto;
+            }
+
+            .logo-box img {
+                width: min(220px, 58vw);
+                max-width: 220px;
+                max-height: none;
+            }
+
+            .hero-sticky {
+                margin: 4px auto 0;
+                padding: 0;
+                text-align: center;
+            }
+
+            .hero-sticky h1 {
+                font-size: clamp(28px, 8vw, 36px);
+            }
+
+            .hero-sticky p {
+                max-width: 34rem;
+                margin: 0 auto;
+                font-size: 16px;
+                line-height: 1.45;
+            }
+
+            .top-right-stack {
+                margin: 0 auto;
+                gap: 12px;
+            }
+
+            .resume-sticky-box,
+            .resume-section {
+                padding: 12px;
+            }
+
+            .resume-upload-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .resume-file-trigger,
+            .resume-upload-btn,
+            .audio-toggle,
+            .submit-btn {
+                min-height: 48px;
+            }
+
+            .resume-file-trigger::before {
+                content: "ВЫБРАТЬ ФАЙЛ";
+                max-width: calc(100% - 24px);
+                white-space: normal;
+                line-height: 1.15;
+            }
+
+            .layout {
+                margin: 0 auto;
+                max-width: 100%;
+            }
+
+            .option {
+                align-items: flex-start;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .page {
+                padding-inline: 10px;
+            }
+
+            .hero-sticky h1 {
+                font-size: 26px;
+            }
+
+            .hero-sticky p,
+            .field label,
+            .group-title,
+            .email-note,
+            .resume-help,
+            .file-note {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <audio id="ambient-audio" loop preload="metadata">
+        <source src="/static/matrix-theme.mp4" type="audio/mp4">
+    </audio>
+
+    <audio id="click-audio" preload="auto">
+        <source src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3?filename=click-124467.mp3" type="audio/mpeg">
+    </audio>
+
+    <div class="logo-box">
+        <img src="/static/logo-white.png" alt="Лаборатория влияния">
+    </div>
+
+    <div class="hero-sticky">
+        <h1>Поиск вакансий</h1>
+        <p>Сформируйте, пожалуйста, свой запрос на поиск или загрузите своё резюме.</p>
+    </div>
+
+    <div class="top-right-stack">
+        <div class="resume-sticky-box">
+            <div class="resume-section">
+                <div class="resume-section-title">1. Загрузка файла резюме</div>
+                <div class="resume-upload-row">
+                    <input
+                        type="file"
+                        id="resume_file"
+                        name="resume_file"
+                        class="resume-file-input"
+                        form="job-search-form"
+                        accept=".pdf,.doc,.docx,.rtf,.txt"
+                    >
+                    <label for="resume_file" class="resume-file-trigger" aria-label="Выбрать файл" title="Выбрать файл"></label>
+                </div>
+                <div id="resume-file-status" class="resume-file-status">Файл не выбран</div>
+                <div class="file-note">
+                    Поддерживаются файлы: PDF, DOC, DOCX, RTF, TXT.
+                </div>
+            </div>
+
+            <div class="resume-section">
+                <div class="resume-section-title">2. Загрузка данных из резюме</div>
+                <div class="resume-upload-row">
+                    <button type="submit" class="resume-upload-btn" form="job-search-form" name="form_action" value="upload_resume_data">ЗАГРУЗИТЬ ДАННЫЕ</button>
+                </div>
+                <div class="resume-help">
+                    Матрица переносит в форму максимум распознанных данных из резюме. Минимум для продолжения — должность и e-mail.
+                </div>
+            </div>
+        </div>
+
+        <div class="audio-inline">
+            <button type="button" class="audio-toggle" id="audio-toggle">Музыка: выкл</button>
+        </div>
+    </div>
+
+    <div class="page">
+        <div class="layout" id="form-layout">
+            {% if error_message %}
+                <div class="flash-error" id="form-feedback">{{ error_message }}</div>
+            {% endif %}
+
+            {% if success_message %}
+                <div class="flash-success" id="form-feedback">{{ success_message }}</div>
+            {% endif %}
+
+            <form id="job-search-form" method="post" action="/job-search" enctype="multipart/form-data">
+                <input type="hidden" name="resume_autofill_done" value="{{ form_data.resume_autofill_done if form_data else '' }}">
+                <input type="hidden" name="resume_file_name" value="{{ form_data.resume_file_name if form_data else '' }}">
+                <input type="hidden" name="resume_file_path" value="{{ form_data.resume_file_path if form_data else '' }}">
+                <input type="hidden" name="resume_uploaded_at" value="{{ form_data.resume_uploaded_at if form_data else '' }}">
+
+                <div class="field" id="position-field">
+                    <label for="position">Должность или профессия</label>
+                    <input type="text" id="position" name="position" placeholder="Произвольно, например: CEO" value="{{ form_data.position if form_data else '' }}">
+                </div>
+
+                <div class="field">
+                    <label for="query_text">Отрасль/сфера деятельности</label>
+                    <select id="query_text" name="query_text">
+                        <option value="">Выберите отрасль</option>
+                        <option value="Финансы" {% if form_data and form_data.query_text == 'Финансы' %}selected{% endif %}>Финансы</option>
+                        <option value="Управление персоналом" {% if form_data and form_data.query_text == 'Управление персоналом' %}selected{% endif %}>Управление персоналом</option>
+                        <option value="Продажи / Развитие бизнеса" {% if form_data and form_data.query_text == 'Продажи / Развитие бизнеса' %}selected{% endif %}>Продажи / Развитие бизнеса</option>
+                        <option value="Маркетинг / PR / Бренд" {% if form_data and form_data.query_text == 'Маркетинг / PR / Бренд' %}selected{% endif %}>Маркетинг / PR / Бренд</option>
+                        <option value="Операционное управление" {% if form_data and form_data.query_text == 'Операционное управление' %}selected{% endif %}>Операционное управление</option>
+                        <option value="Логистика / Закупки / Supply Chain" {% if form_data and form_data.query_text == 'Логистика / Закупки / Supply Chain' %}selected{% endif %}>Логистика / Закупки / Supply Chain</option>
+                        <option value="Производство / Инжиниринг" {% if form_data and form_data.query_text == 'Производство / Инжиниринг' %}selected{% endif %}>Производство / Инжиниринг</option>
+                        <option value="Проектное управление" {% if form_data and form_data.query_text == 'Проектное управление' %}selected{% endif %}>Проектное управление</option>
+                        <option value="IT / Digital / Product" {% if form_data and form_data.query_text == 'IT / Digital / Product' %}selected{% endif %}>IT / Digital / Product</option>
+                        <option value="Юриспруденция / Compliance" {% if form_data and form_data.query_text == 'Юриспруденция / Compliance' %}selected{% endif %}>Юриспруденция / Compliance</option>
+                        <option value="Туризм / Гостеприимство" {% if form_data and form_data.query_text == 'Туризм / Гостеприимство' %}selected{% endif %}>Туризм / Гостеприимство</option>
+                        <option value="HoReCa / Ресторанный бизнес" {% if form_data and form_data.query_text == 'HoReCa / Ресторанный бизнес' %}selected{% endif %}>HoReCa / Ресторанный бизнес</option>
+                        <option value="Гостиничный бизнес" {% if form_data and form_data.query_text == 'Гостиничный бизнес' %}selected{% endif %}>Гостиничный бизнес</option>
+                        <option value="FMCG / Retail / Пищевая отрасль" {% if form_data and form_data.query_text == 'FMCG / Retail / Пищевая отрасль' %}selected{% endif %}>FMCG / Retail / Пищевая отрасль</option>
+                        <option value="Энергетика / Нефтегаз" {% if form_data and form_data.query_text == 'Энергетика / Нефтегаз' %}selected{% endif %}>Энергетика / Нефтегаз</option>
+                        <option value="Медицина / Фарма" {% if form_data and form_data.query_text == 'Медицина / Фарма' %}selected{% endif %}>Медицина / Фарма</option>
+                        <option value="Строительство / Девелопмент / Недвижимость" {% if form_data and form_data.query_text == 'Строительство / Девелопмент / Недвижимость' %}selected{% endif %}>Строительство / Девелопмент / Недвижимость</option>
+                        <option value="Образование" {% if form_data and form_data.query_text == 'Образование' %}selected{% endif %}>Образование</option>
+                        <option value="Государственный сектор" {% if form_data and form_data.query_text == 'Государственный сектор' %}selected{% endif %}>Государственный сектор</option>
+                        <option value="Консалтинг" {% if form_data and form_data.query_text == 'Консалтинг' %}selected{% endif %}>Консалтинг</option>
+                        <option value="Другое" {% if form_data and form_data.query_text == 'Другое' %}selected{% endif %}>Другое</option>
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label for="salary_min">Уровень дохода (₽)</label>
+                    <input type="number" id="salary_min" name="salary_min" min="0" step="1" placeholder="Произвольно, например: 650000" value="{{ form_data.salary_min if form_data else '' }}">
+                </div>
+
+                <div class="field">
+                    <label for="location">Локация</label>
+                    <input type="text" id="location" name="location" placeholder="Город, регион" value="{{ form_data.location if form_data else '' }}">
+                </div>
+
+                <div class="field">
+                    <div class="group-title">Тип занятости</div>
+                    <div class="radio-group">
+                        <label class="option">
+                            <input type="radio" name="employment_type" value="full" {% if not form_data or not form_data.employment_type or form_data.employment_type == 'full' %}checked{% endif %}>
+                            <span>1. Полная</span>
+                        </label>
+
+                        <label class="option">
+                            <input type="radio" name="employment_type" value="part" {% if form_data and form_data.employment_type == 'part' %}checked{% endif %}>
+                            <span>2. Частичная</span>
+                        </label>
+
+                        <label class="option">
+                            <input type="radio" name="employment_type" value="project" {% if form_data and form_data.employment_type == 'project' %}checked{% endif %}>
+                            <span>3. Проектная работа</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="group-title">Формат работы</div>
+                    <div class="radio-group">
+                        <label class="option">
+                            <input type="radio" name="work_format" value="office" {% if not form_data or not form_data.work_format or form_data.work_format == 'office' %}checked{% endif %}>
+                            <span>1. На месте работодателя</span>
+                        </label>
+
+                        <label class="option">
+                            <input type="radio" name="work_format" value="remote" {% if form_data and form_data.work_format == 'remote' %}checked{% endif %}>
+                            <span>2. Удалённо</span>
+                        </label>
+
+                        <label class="option">
+                            <input type="radio" name="work_format" value="hybrid" {% if form_data and form_data.work_format == 'hybrid' %}checked{% endif %}>
+                            <span>3. Гибрид</span>
+                        </label>
+
+                        <label class="option">
+                            <input type="radio" name="work_format" value="travel" {% if form_data and form_data.work_format == 'travel' %}checked{% endif %}>
+                            <span>4. Разъездной</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="group-title">Выводить</div>
+                    <div class="radio-group">
+                        <label class="option">
+                            <input type="radio" name="display_period" value="all_time" {% if not form_data or not form_data.display_period or form_data.display_period == 'all_time' %}checked{% endif %}>
+                            <span>1. За всё время</span>
+                        </label>
+
+                        <label class="option">
+                            <input type="radio" name="display_period" value="month" {% if form_data and form_data.display_period == 'month' %}checked{% endif %}>
+                            <span>2. За последний месяц</span>
+                        </label>
+
+                        <label class="option">
+                            <input type="radio" name="display_period" value="week" {% if form_data and form_data.display_period == 'week' %}checked{% endif %}>
+                            <span>3. За последнюю неделю</span>
+                        </label>
+
+                        <label class="option">
+                            <input type="radio" name="display_period" value="three_days" {% if form_data and form_data.display_period == 'three_days' %}checked{% endif %}>
+                            <span>4. За последние три дня</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="group-title">Сортировка</div>
+                    <div class="radio-group">
+                        <label class="option">
+                            <input type="radio" name="sort_order" value="relevance" {% if not form_data or not form_data.sort_order or form_data.sort_order == 'relevance' %}checked{% endif %}>
+                            <span>1. По соответствию</span>
+                        </label>
+
+                        <label class="option">
+                            <input type="radio" name="sort_order" value="salary_desc" {% if form_data and form_data.sort_order == 'salary_desc' %}checked{% endif %}>
+                            <span>2. По убыванию уровня дохода</span>
+                        </label>
+
+                        <label class="option">
+                            <input type="radio" name="sort_order" value="salary_asc" {% if form_data and form_data.sort_order == 'salary_asc' %}checked{% endif %}>
+                            <span>3. По возрастанию уровня дохода</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="group-title">Источник вакансии</div>
+                    <div class="radio-group">
+                        <label class="option">
+                            <input type="radio" name="vacancy_source" value="all" {% if not form_data or not form_data.vacancy_source or form_data.vacancy_source == 'all' %}checked{% endif %}>
+                            <span>1. Всё</span>
+                        </label>
+
+                        <label class="option">
+                            <input type="radio" name="vacancy_source" value="employer" {% if form_data and form_data.vacancy_source == 'employer' %}checked{% endif %}>
+                            <span>2. Работодатель</span>
+                        </label>
+
+                        <label class="option">
+                            <input type="radio" name="vacancy_source" value="agency" {% if form_data and form_data.vacancy_source == 'agency' %}checked{% endif %}>
+                            <span>3. Агентство</span>
+                        </label>
+
+                        <label class="option">
+                            <input type="radio" name="vacancy_source" value="accredited_agents" {% if form_data and form_data.vacancy_source == 'accredited_agents' %}checked{% endif %}>
+                            <span>4. От аккредитованных агентов</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="keywords">Ключевые слова / уточнения</label>
+                    <textarea id="keywords" name="keywords" placeholder="Например: управление командой, развитие бизнеса, финансы">{{ form_data.keywords if form_data else '' }}</textarea>
+                </div>
+
+                <div class="field">
+                    <label for="email">Ваш e-mail</label>
+                    <input type="email" id="email" name="email" placeholder="mail@domain.ru" value="{{ form_data.email if form_data else '' }}">
+                </div>
+
+                <div class="submit-wrap">
+                    <button type="submit" class="submit-btn" name="form_action" value="start_search">Найти вакансии</button>
+                </div>
+
+                <div class="email-note">Мы сохраняем вашу конфиденциальность</div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const ambientAudio = document.getElementById("ambient-audio");
+            const clickAudio = document.getElementById("click-audio");
+            const audioToggle = document.getElementById("audio-toggle");
+            const resumeFileInput = document.getElementById("resume_file");
+            const resumeFileStatus = document.getElementById("resume-file-status");
+            const jobSearchForm = document.getElementById("job-search-form");
+            const resumeAutofillDoneInput = jobSearchForm ? jobSearchForm.querySelector('input[name="resume_autofill_done"]') : null;
+            const formFeedback = document.getElementById("form-feedback");
+            const positionField = document.getElementById("position-field");
+            const querySelect = document.getElementById("query_text");
+            let ambientEnabled = false;
+
+            function playClick() {
+                if (!clickAudio) return;
+                try {
+                    clickAudio.currentTime = 0;
+                    clickAudio.play();
+                } catch (e) {}
+            }
+
+            function updateAudioButton() {
+                audioToggle.textContent = ambientEnabled ? "Музыка: вкл" : "Музыка: выкл";
+            }
+
+            function toggleAmbient() {
+                ambientEnabled = !ambientEnabled;
+
+                if (ambientEnabled) {
+                    ambientAudio.volume = 0.18;
+                    ambientAudio.play().then(function () {
+                        playClick();
+                        updateAudioButton();
+                    }).catch(function () {
+                        ambientEnabled = false;
+                        updateAudioButton();
+                    });
+                    return;
+                }
+
+                ambientAudio.pause();
+                playClick();
+                updateAudioButton();
+            }
+
+            function scrollToAutofillResults() {
+                if (!resumeAutofillDoneInput) {
+                    return;
+                }
+
+                const autofillValue = String(resumeAutofillDoneInput.value || "").trim().toLowerCase();
+                const shouldScroll = ["1", "true", "yes", "done", "ok"].includes(autofillValue);
+
+                if (!shouldScroll) {
+                    return;
+                }
+
+                const target = formFeedback || positionField;
+                if (!target) {
+                    return;
+                }
+
+                window.requestAnimationFrame(function () {
+                    setTimeout(function () {
+                        target.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start"
+                        });
+                    }, 180);
+                });
+            }
+
+            if (audioToggle) {
+                audioToggle.addEventListener("click", toggleAmbient);
+            }
+
+            document.querySelectorAll("button, input[type='file']").forEach(function (el) {
+                if (el === audioToggle) {
+                    return;
+                }
+                el.addEventListener("click", function () {
+                    playClick();
+                });
+            });
+
+            document.querySelectorAll(".option input").forEach(function (inputEl) {
+                inputEl.addEventListener("change", function () {
+                    playClick();
+                });
+            });
+
+            if (querySelect) {
+                querySelect.addEventListener("change", function () {
+                    playClick();
+                });
+            }
+
+            if (resumeFileInput && resumeFileStatus) {
+                resumeFileInput.addEventListener("change", function () {
+                    const files = resumeFileInput.files;
+                    if (files && files.length > 0) {
+                        resumeFileStatus.textContent = "Выбран файл: " + files[0].name;
+                        if (resumeAutofillDoneInput) {
+                            resumeAutofillDoneInput.value = "";
+                        }
+                    } else {
+                        resumeFileStatus.textContent = "Файл не выбран";
+                    }
+                });
+            }
+
+            if (jobSearchForm) {
+                jobSearchForm.addEventListener("submit", function (event) {
+                    const submitter = event.submitter;
+                    if (!submitter) {
+                        return;
+                    }
+
+                    if (submitter.value === "upload_resume_data") {
+                        const hasNewFile = resumeFileInput && resumeFileInput.files && resumeFileInput.files.length > 0;
+                        if (!hasNewFile) {
+                            event.preventDefault();
+                            resumeFileStatus.textContent = "Сначала выберите файл резюме, затем нажмите «ЗАГРУЗИТЬ ДАННЫЕ».";
+                        }
+                    }
+                });
+            }
+
+            updateAudioButton();
+            scrollToAutofillResults();
+        })();
+    </script>
+</body>
+</html>

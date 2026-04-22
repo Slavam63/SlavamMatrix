@@ -1,0 +1,2284 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Матрица-Результаты парсинга</title>
+ 
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+ 
+    {% set request_id = job_request_id if job_request_id is defined else (job_request.id if job_request is defined and job_request else 0) %}
+ 
+    <script src="{{ url_for('static', filename='vendor/docx-8.5.0.min.js') }}"></script>
+ 
+    <style>
+        :root {
+            --gold-soft: #f9fcba;
+            --gold-dim: rgba(249, 252, 186, 0.82);
+            --border: rgba(249, 252, 186, 0.68);
+            --panel-bg: rgba(58, 31, 4, 0.20);
+            --panel-bg-soft: rgba(34, 19, 2, 0.26);
+            --button-bg: linear-gradient(180deg, rgba(239, 214, 136, 0.20) 0%, rgba(200, 160, 65, 0.16) 100%);
+            --button-hover-bg: rgba(20, 82, 41, 0.88);
+            --hover-red: #d64040;
+            --panel-blur: blur(8px);
+        }
+ 
+        * { box-sizing: border-box; }
+ 
+        html, body {
+            margin: 0;
+            min-height: 100%;
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--gold-soft);
+            background:
+                linear-gradient(rgba(20, 13, 5, 0.42), rgba(20, 13, 5, 0.62)),
+                linear-gradient(180deg, rgba(33, 22, 9, 0.10) 0%, rgba(18, 13, 7, 0.72) 100%),
+                url("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2400&q=100") center center / cover no-repeat fixed;
+        }
+ 
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 50% 16%, rgba(255, 227, 158, 0.16), transparent 28%),
+                linear-gradient(180deg, rgba(13, 9, 5, 0.08) 0%, rgba(13, 9, 5, 0.42) 100%);
+        }
+ 
+        .page {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            padding: 12px 16px 20px;
+        }
+ 
+        .top-composition {
+            width: 100%;
+            max-width: 1220px;
+            margin: 0 auto 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+ 
+        .logo-top {
+            width: 260px;
+            max-width: 260px;
+            margin-bottom: 0;
+        }
+ 
+        .logo-top img {
+            display: block;
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+            filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.24));
+        }
+ 
+        .hero-sticky {
+            width: 100%;
+            max-width: 820px;
+            text-align: center;
+            margin-top: 4px;
+        }
+ 
+        .hero-sticky h1 {
+            margin: 0 0 4px;
+            font-size: 24px;
+            line-height: 1.12;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+            color: var(--gold-soft);
+        }
+ 
+        .hero-sticky p {
+            margin: 0;
+            font-size: 16px;
+            line-height: 1.34;
+            color: var(--gold-soft);
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+        }
+ 
+        .layout {
+            width: 100%;
+            max-width: 1180px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+ 
+        .glass-panel {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: var(--panel-bg);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            backdrop-filter: var(--panel-blur);
+        }
+ 
+        .results-panel {
+            padding: 10px 10px 10px;
+        }
+ 
+        .results-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+ 
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 4px 10px;
+            border: 1px solid rgba(249, 252, 186, 0.66);
+            border-radius: 999px;
+            background: rgba(34, 19, 2, 0.34);
+            font-size: 12px;
+            line-height: 1.2;
+            font-weight: 700;
+            color: var(--gold-soft);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+        }
+ 
+        .audio-toggle,
+        .action-btn,
+        .fake-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(249, 252, 186, 0.76);
+            border-radius: 10px;
+            background: rgba(34, 19, 2, 0.78);
+            color: var(--gold-soft);
+            padding: 6px 12px;
+            font-size: 13px;
+            line-height: 1.2;
+            cursor: pointer;
+            white-space: nowrap;
+            text-decoration: none;
+            backdrop-filter: var(--panel-blur);
+            transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease, transform 0.14s ease;
+        }
+ 
+        .audio-toggle:hover,
+        .action-btn:hover {
+            background: var(--button-hover-bg);
+            color: var(--hover-red);
+            border-color: var(--hover-red);
+            transform: translateY(-1px);
+        }
+ 
+        .fake-btn {
+            cursor: default;
+            background: rgba(34, 19, 2, 0.34);
+        }
+ 
+        .action-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+ 
+        .bottom-actions {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+ 
+        .action-btn.wide {
+            min-width: 220px;
+        }
+ 
+        .status-line {
+            margin-top: 8px;
+            font-size: 13px;
+            line-height: 1.34;
+            color: var(--gold-soft);
+            overflow-wrap: anywhere;
+        }
+ 
+        .notice {
+            display: none;
+            padding: 10px 12px;
+            border: 1px solid rgba(249, 252, 186, 0.30);
+            border-radius: 14px;
+            background: rgba(34, 19, 2, 0.24);
+        }
+ 
+        .notice.visible {
+            display: block;
+        }
+ 
+        .notice h2 {
+            margin: 0 0 4px;
+            font-size: 16px;
+            line-height: 1.2;
+            font-weight: 700;
+            color: var(--gold-soft);
+        }
+ 
+        .notice p {
+            margin: 0;
+            font-size: 13px;
+            line-height: 1.34;
+            color: var(--gold-soft);
+            overflow-wrap: anywhere;
+        }
+ 
+        .vacancies-panel {
+            padding: 10px;
+        }
+ 
+        .panel-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+ 
+        .panel-title h2 {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.2;
+            font-weight: 700;
+            color: var(--gold-soft);
+        }
+ 
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 26px;
+            padding: 4px 9px;
+            border: 1px solid rgba(249, 252, 186, 0.34);
+            border-radius: 999px;
+            background: rgba(34, 19, 2, 0.30);
+            font-size: 12px;
+            line-height: 1.2;
+            font-weight: 700;
+            color: var(--gold-soft);
+            white-space: nowrap;
+            max-width: 100%;
+        }
+ 
+        .vacancy-scroll {
+            max-height: 420px;
+            overflow-y: auto;
+            padding-right: 6px;
+        }
+ 
+        .vacancy-scroll::-webkit-scrollbar {
+            width: 10px;
+        }
+ 
+        .vacancy-scroll::-webkit-scrollbar-track {
+            background: rgba(34, 19, 2, 0.18);
+            border-radius: 999px;
+        }
+ 
+        .vacancy-scroll::-webkit-scrollbar-thumb {
+            background: rgba(249, 252, 186, 0.28);
+            border-radius: 999px;
+        }
+ 
+        .vacancy-list {
+            display: grid;
+            gap: 10px;
+        }
+ 
+        .vacancy-empty {
+            border: 1px dashed rgba(249, 252, 186, 0.22);
+            border-radius: 14px;
+            background: rgba(34, 19, 2, 0.15);
+            padding: 15px 15px;
+            font-size: 15px;
+            line-height: 1.5;
+            color: var(--gold-soft);
+        }
+ 
+        details.vacancy-card {
+            border: 1px solid rgba(249, 252, 186, 0.26);
+            border-radius: 14px;
+            background: rgba(34, 19, 2, 0.22);
+            overflow: hidden;
+        }
+ 
+        details.vacancy-card[open] {
+            background: rgba(34, 19, 2, 0.34);
+        }
+ 
+        .vacancy-summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 12px 14px;
+        }
+ 
+        .vacancy-summary::-webkit-details-marker {
+            display: none;
+        }
+ 
+        .vacancy-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+ 
+        .vacancy-title-block {
+            min-width: 0;
+        }
+ 
+        .vacancy-title {
+            margin: 0 0 4px;
+            font-size: 17px;
+            line-height: 1.3;
+            font-weight: 700;
+            color: var(--gold-soft);
+            word-break: break-word;
+        }
+ 
+        .vacancy-company {
+            font-size: 14px;
+            line-height: 1.4;
+            color: var(--gold-soft);
+            opacity: 0.92;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+ 
+        .vacancy-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            margin-top: 9px;
+        }
+ 
+        .meta-chip {
+            display: inline-flex;
+            align-items: center;
+            min-height: 25px;
+            padding: 4px 9px;
+            border: 1px solid rgba(249, 252, 186, 0.26);
+            border-radius: 999px;
+            background: rgba(34, 19, 2, 0.22);
+            font-size: 12px;
+            line-height: 1.2;
+            color: var(--gold-soft);
+            max-width: 100%;
+        }
+ 
+        .vacancy-body {
+            padding: 0 14px 14px;
+            color: var(--gold-soft);
+            font-size: 14px;
+            line-height: 1.48;
+            overflow-wrap: anywhere;
+        }
+ 
+        .vacancy-body p {
+            margin: 0 0 14px;
+            line-height: 1.55;
+        }
+ 
+        .vacancy-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+ 
+        .vacancy-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(249, 252, 186, 0.78);
+            border-radius: 10px;
+            background: var(--button-bg);
+            color: var(--gold-soft);
+            padding: 9px 14px;
+            font-size: 14px;
+            line-height: 1.2;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+            text-decoration: none;
+            cursor: pointer;
+            box-shadow:
+                0 8px 18px rgba(0, 0, 0, 0.16),
+                inset 0 1px 0 rgba(255, 255, 255, 0.10);
+            transition: transform 0.14s ease, background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+        }
+ 
+        .vacancy-link:hover {
+            background: var(--button-hover-bg);
+            color: var(--hover-red);
+            border-color: var(--hover-red);
+            transform: translateY(-1px);
+        }
+ 
+        .selected-panel {
+            margin-top: 10px;
+            padding: 10px;
+        }
+ 
+        .selected-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+ 
+        .selected-title {
+            margin: 0 0 4px;
+            font-size: 18px;
+            line-height: 1.24;
+            font-weight: 700;
+            word-break: break-word;
+            color: var(--gold-soft);
+        }
+ 
+        .selected-company {
+            font-size: 14px;
+            line-height: 1.4;
+            color: var(--gold-soft);
+            overflow-wrap: anywhere;
+        }
+ 
+        .selected-meta {
+            display: flex;
+            gap: 7px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+ 
+        .selected-section {
+            margin-bottom: 12px;
+        }
+ 
+        .selected-section:last-child {
+            margin-bottom: 0;
+        }
+ 
+        .selected-section h3 {
+            margin: 0 0 6px;
+            font-size: 14px;
+            line-height: 1.2;
+            font-weight: 700;
+            color: var(--gold-soft);
+        }
+ 
+        .selected-section p {
+            margin: 0;
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--gold-soft);
+            white-space: pre-line;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+ 
+        .selected-links {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+ 
+        .selected-empty {
+            border: 1px dashed rgba(249, 252, 186, 0.22);
+            border-radius: 14px;
+            background: rgba(34, 19, 2, 0.15);
+            padding: 15px 15px;
+            font-size: 15px;
+            line-height: 1.5;
+            color: var(--gold-soft);
+        }
+ 
+        .print-only {
+            display: none;
+        }
+ 
+        @media (max-width: 980px) {
+            .page {
+                padding: 16px 12px 24px;
+            }
+ 
+            .top-composition {
+                margin-bottom: 10px;
+            }
+ 
+            .action-grid {
+                grid-template-columns: 1fr;
+            }
+ 
+            .results-panel,
+            .vacancies-panel,
+            .selected-panel {
+                padding: 12px;
+            }
+        }
+ 
+        @media (max-width: 760px) {
+            .page {
+                padding: 16px 10px 26px;
+            }
+ 
+            .logo-top {
+                width: min(220px, 56vw);
+                max-width: none;
+            }
+ 
+            .hero-sticky {
+                margin-top: 12px;
+                max-width: 100%;
+                padding: 0 4px;
+            }
+ 
+            .hero-sticky h1 {
+                font-size: clamp(20px, 6.8vw, 26px);
+            }
+ 
+            .hero-sticky p {
+                font-size: 14px;
+                line-height: 1.5;
+            }
+ 
+            .results-head,
+            .panel-title,
+            .vacancy-top,
+            .selected-head {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+ 
+            .eyebrow,
+            .badge,
+            .meta-chip {
+                white-space: normal;
+                overflow-wrap: anywhere;
+                justify-content: center;
+                text-align: center;
+            }
+ 
+            .audio-toggle,
+            .action-btn,
+            .fake-btn,
+            .vacancy-link {
+                width: 100%;
+                min-width: 0;
+                white-space: normal;
+                text-align: center;
+            }
+ 
+            .bottom-actions,
+            .vacancy-actions,
+            .selected-links {
+                flex-direction: column;
+                align-items: stretch;
+            }
+ 
+            .action-btn.wide {
+                min-width: 0;
+            }
+ 
+            .vacancy-scroll {
+                max-height: none;
+                overflow: visible;
+                padding-right: 0;
+            }
+ 
+            .vacancy-summary,
+            .vacancy-body {
+                padding-left: 12px;
+                padding-right: 12px;
+            }
+ 
+            .vacancy-title,
+            .selected-title {
+                font-size: 16px;
+            }
+ 
+            .status-line,
+            .notice p,
+            .vacancy-body,
+            .selected-section p {
+                overflow-wrap: anywhere;
+            }
+        }
+ 
+        @media (max-width: 560px) {
+            .page {
+                padding: 14px 10px 22px;
+            }
+ 
+            .top-composition {
+                margin-bottom: 12px;
+            }
+ 
+            .results-panel,
+            .vacancies-panel,
+            .selected-panel,
+            .notice {
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+ 
+            .results-head,
+            .panel-title,
+            .selected-head {
+                gap: 10px;
+            }
+ 
+            .panel-title h2,
+            .selected-title {
+                font-size: 16px;
+                line-height: 1.3;
+            }
+ 
+            .vacancy-title {
+                font-size: 15px;
+                line-height: 1.35;
+            }
+ 
+            .vacancy-summary,
+            .vacancy-body {
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+ 
+            .vacancy-body,
+            .selected-section p,
+            .status-line,
+            .notice p {
+                font-size: 13px;
+                line-height: 1.55;
+            }
+ 
+            .vacancy-empty,
+            .selected-empty {
+                padding: 12px;
+                font-size: 14px;
+            }
+        }
+ 
+        @media print {
+            @page {
+                size: A4;
+                margin: 14mm;
+            }
+ 
+            html, body {
+                background: #ffffff !important;
+                color: #111111 !important;
+            }
+ 
+            body::before,
+            .top-composition,
+            .results-head,
+            .action-grid,
+            .bottom-actions,
+            .notice,
+            .status-line,
+            #resultsMusic,
+            .audio-toggle {
+                display: none !important;
+            }
+ 
+            .page {
+                padding: 0 !important;
+            }
+ 
+            .layout {
+                max-width: none !important;
+            }
+ 
+            .glass-panel {
+                box-shadow: none !important;
+                border: 1px solid #cccccc !important;
+                background: #ffffff !important;
+                backdrop-filter: none !important;
+                break-inside: avoid;
+            }
+ 
+            .panel-title h2,
+            .selected-title,
+            .selected-company,
+            .selected-section h3,
+            .selected-section p,
+            .vacancy-title,
+            .vacancy-company,
+            .vacancy-body,
+            .vacancy-empty,
+            .selected-empty,
+            .meta-chip,
+            .badge,
+            .status-line {
+                color: #111111 !important;
+            }
+ 
+            .meta-chip,
+            .badge {
+                background: #f5f5f5 !important;
+            }
+ 
+            .print-only {
+                display: block !important;
+                margin: 0 0 12px;
+                color: #111111 !important;
+            }
+ 
+            .vacancy-scroll {
+                max-height: none !important;
+                overflow: visible !important;
+            }
+ 
+            a {
+                color: #111111 !important;
+                text-decoration: underline !important;
+            }
+        }
+ 
+        .vacancy-card {
+            border: 1px solid rgba(249, 252, 186, 0.34);
+            background: rgba(28, 16, 4, 0.52);
+            transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+        }
+ 
+        .vacancy-card:hover {
+            border-color: rgba(249, 252, 186, 0.58);
+            background: rgba(36, 21, 6, 0.62);
+            transform: translateY(-1px);
+        }
+ 
+        .vacancy-summary {
+            cursor: pointer;
+        }
+ 
+        .vacancy-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(8, 6, 4, 0.72);
+            backdrop-filter: blur(6px);
+        }
+ 
+        .vacancy-modal.visible {
+            display: flex;
+        }
+ 
+        .vacancy-modal-dialog {
+            width: min(980px, calc(100vw - 32px));
+            max-height: calc(100vh - 48px);
+            overflow: auto;
+            border: 1px solid rgba(249, 252, 186, 0.42);
+            border-radius: 20px;
+            background: linear-gradient(180deg, rgba(58, 31, 4, 0.92) 0%, rgba(24, 15, 7, 0.96) 100%);
+            box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+        }
+ 
+        .vacancy-modal-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 18px;
+            padding: 22px 22px 18px;
+            border-bottom: 1px solid rgba(249, 252, 186, 0.18);
+        }
+ 
+        .vacancy-modal-side {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 0 0 auto;
+            margin-left: auto;
+        }
+ 
+        .vacancy-modal-brand {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+ 
+        .vacancy-modal-brand img {
+            width: 118px;
+            height: auto;
+            opacity: 0.86;
+            filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.26));
+        }
+ 
+        .vacancy-modal-kicker {
+            display: inline-flex;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 13px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(249, 252, 186, 0.76);
+        }
+ 
+        .vacancy-modal-title {
+            margin: 0 0 8px;
+            font-size: 30px;
+            line-height: 1.15;
+        }
+ 
+        .vacancy-modal-company {
+            font-size: 19px;
+            line-height: 1.35;
+            color: rgba(249, 252, 186, 0.88);
+            overflow-wrap: anywhere;
+        }
+ 
+        .vacancy-modal-close {
+            flex: 0 0 auto;
+            width: 44px;
+            height: 44px;
+            border: 1px solid rgba(249, 252, 186, 0.48);
+            border-radius: 999px;
+            background: rgba(34, 19, 2, 0.78);
+            color: var(--gold-soft);
+            font-size: 24px;
+            line-height: 1;
+            cursor: pointer;
+            transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease, transform 0.14s ease;
+        }
+ 
+        .vacancy-modal-close:hover {
+            background: var(--button-hover-bg);
+            color: var(--hover-red);
+            border-color: var(--hover-red);
+            transform: translateY(-1px);
+        }
+ 
+        .vacancy-modal-content {
+            padding: 18px 22px 20px;
+        }
+ 
+        .vacancy-modal-facts {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+ 
+        .vacancy-modal-fact {
+            border: 1px solid rgba(249, 252, 186, 0.18);
+            border-radius: 14px;
+            background: rgba(249, 252, 186, 0.06);
+            padding: 12px 14px;
+        }
+ 
+        .vacancy-modal-fact-label {
+            margin-bottom: 6px;
+            font-size: 12px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: rgba(249, 252, 186, 0.66);
+        }
+ 
+        .vacancy-modal-fact-value {
+            font-size: 16px;
+            line-height: 1.45;
+            color: var(--gold-soft);
+            word-break: break-word;
+        }
+ 
+        .vacancy-modal-section {
+            margin-top: 18px;
+            padding-top: 18px;
+            border-top: 1px solid rgba(249, 252, 186, 0.14);
+        }
+ 
+        .vacancy-modal-section:first-child {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: 0;
+        }
+ 
+        .vacancy-modal-section h3 {
+            margin: 0 0 10px;
+            font-size: 18px;
+            line-height: 1.3;
+        }
+ 
+        .vacancy-modal-section p {
+            margin: 0;
+            font-size: 16px;
+            line-height: 1.65;
+            color: rgba(249, 252, 186, 0.94);
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+ 
+        .vacancy-modal-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 16px;
+        }
+ 
+        .manual-intake-form {
+            display: grid;
+            gap: 12px;
+        }
+ 
+        .manual-intake-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+ 
+        .manual-intake-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+ 
+        .manual-intake-field.full {
+            grid-column: 1 / -1;
+        }
+ 
+        .manual-intake-label {
+            font-size: 13px;
+            line-height: 1.3;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: rgba(249, 252, 186, 0.78);
+        }
+ 
+        .manual-intake-input,
+        .manual-intake-textarea {
+            width: 100%;
+            border: 1px solid rgba(249, 252, 186, 0.34);
+            border-radius: 12px;
+            background: rgba(20, 12, 4, 0.82);
+            color: var(--gold-soft);
+            padding: 11px 12px;
+            font-size: 14px;
+            line-height: 1.45;
+            font-family: Georgia, "Times New Roman", serif;
+            outline: none;
+            transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+        }
+ 
+        .manual-intake-input:focus,
+        .manual-intake-textarea:focus {
+            border-color: rgba(249, 252, 186, 0.72);
+            box-shadow: 0 0 0 3px rgba(249, 252, 186, 0.10);
+            background: rgba(28, 16, 5, 0.9);
+        }
+ 
+        .manual-intake-input::placeholder,
+        .manual-intake-textarea::placeholder {
+            color: rgba(249, 252, 186, 0.44);
+        }
+ 
+        .manual-intake-textarea {
+            min-height: 180px;
+            resize: vertical;
+        }
+ 
+        .manual-intake-status {
+            min-height: 22px;
+            font-size: 13px;
+            line-height: 1.4;
+            color: rgba(249, 252, 186, 0.82);
+        }
+ 
+        .manual-intake-status.error {
+            color: #ff9d9d;
+        }
+ 
+        .manual-intake-status.success {
+            color: #b8ffbf;
+        }
+ 
+        @media (max-width: 900px) {
+            .vacancy-modal {
+                padding: 12px;
+            }
+ 
+            .vacancy-modal-dialog {
+                width: calc(100vw - 24px);
+                max-height: calc(100vh - 24px);
+            }
+ 
+            .vacancy-modal-header {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 14px;
+                padding: 16px 16px 14px;
+            }
+ 
+            .vacancy-modal-content {
+                padding: 16px;
+            }
+ 
+            .vacancy-modal-side {
+                width: 100%;
+                justify-content: space-between;
+                margin-left: 0;
+            }
+ 
+            .vacancy-modal-facts {
+                grid-template-columns: 1fr;
+            }
+ 
+            .manual-intake-grid {
+                grid-template-columns: 1fr;
+            }
+ 
+            .vacancy-modal-title {
+                font-size: 24px;
+            }
+ 
+            .vacancy-modal-company {
+                font-size: 17px;
+            }
+ 
+            .vacancy-modal-actions {
+                flex-direction: column;
+            }
+        }
+ 
+        @media (max-width: 560px) {
+            .vacancy-modal {
+                padding: 8px;
+            }
+ 
+            .vacancy-modal-dialog {
+                width: calc(100vw - 16px);
+                max-height: calc(100vh - 16px);
+                border-radius: 16px;
+            }
+ 
+            .vacancy-modal-header,
+            .vacancy-modal-content {
+                padding: 14px 12px;
+            }
+ 
+            .vacancy-modal-brand img {
+                width: 84px;
+            }
+ 
+            .vacancy-modal-title {
+                font-size: 20px;
+                line-height: 1.2;
+            }
+ 
+            .vacancy-modal-company {
+                font-size: 15px;
+            }
+ 
+            .vacancy-modal-fact,
+            .vacancy-modal-section p {
+                font-size: 14px;
+            }
+ 
+            .vacancy-modal-actions .action-btn,
+            .vacancy-modal-actions .vacancy-link {
+                width: 100%;
+                min-width: 0;
+                white-space: normal;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <audio id="resultsMusic" loop preload="auto">
+        <source src="{{ url_for('static', filename='results-theme.mp3') }}" type="audio/mpeg">
+    </audio>
+ 
+    <div class="page">
+        <div class="top-composition">
+            <div class="logo-top">
+                <img src="{{ url_for('static', filename='logo-white.png') }}" alt="Лаборатория влияния">
+            </div>
+ 
+            <div class="hero-sticky">
+                <h1>РЕЗУЛЬТАТЫ ПАРСИНГА</h1>
+                <p>На этой странице вы можете ознакомиться с результатами парсинга по вашему запросу.</p>
+            </div>
+        </div>
+ 
+        <div class="layout" id="pageRoot" data-request-id="{{ request_id }}">
+            <section class="glass-panel results-panel">
+                <div class="results-head">
+                    <div class="fake-btn">ВАШИ РЕЗУЛЬТАТЫ</div>
+                    <button type="button" class="audio-toggle" id="audio-toggle">Музыка: выкл</button>
+                </div>
+ 
+                <div class="action-grid">
+                    <button type="button" class="action-btn" id="toggleListBtn">СПИСОК ВАКАНСИЙ</button>
+                    <button type="button" class="action-btn" id="downloadListDocxBtn">СОХРАНИТЬ РЕЗУЛЬТАТЫ</button>
+                    <button type="button" class="action-btn" id="printListBtn">ПЕЧАТЬ РЕЗУЛЬТАТОВ</button>
+                    <button type="button" class="action-btn" id="openManualIntakeBtn">ДОБАВИТЬ ВАКАНСИЮ</button>
+                </div>
+ 
+                <div class="bottom-actions">
+                    <a href="/job-search" class="action-btn wide" id="restartBtn">НАЧАТЬ ЗАНОВО</a>
+                    <a href="https://labinfluences.ru/search_for_vacancies" class="action-btn wide" id="exitBtn">ВЫХОД</a>
+                </div>
+ 
+                <div class="status-line" id="statusLine">
+                    Источники, ссылки и карточки вакансий обновляются автоматически.
+                </div>
+            </section>
+ 
+            <section class="notice" id="noticeBox">
+                <h2 id="noticeTitle">Результат ещё формируется</h2>
+                <p id="noticeText">
+                    Система ещё может обновлять данные. Страница продолжит автоматически проверять статус и список вакансий.
+                </p>
+            </section>
+ 
+            <section class="glass-panel vacancies-panel" id="vacanciesPanel" style="display: none;">
+                <div class="print-only">
+                    <h2>Список найденных вакансий</h2>
+                    <p>Заявка №{{ request_id }}</p>
+                </div>
+ 
+                <div class="panel-title">
+                    <h2>СПИСОК ВАКАНСИЙ</h2>
+                    <div class="badge" id="vacancyBadge">0 позиций</div>
+                </div>
+ 
+                <div class="vacancy-scroll">
+                    <div class="vacancy-list" id="vacancyList">
+                        <div class="vacancy-empty" id="vacancyEmpty">
+                            Пока вакансий нет в отображении. Как только данные будут доступны, они появятся здесь автоматически.
+                        </div>
+                    </div>
+                </div>
+            </section>
+ 
+            <section class="glass-panel selected-panel" id="selectedPanel" style="display: none;">
+                <div class="print-only">
+                    <h2>Отдельная вакансия</h2>
+                    <p>Заявка №{{ request_id }}</p>
+                </div>
+ 
+                <div class="panel-title">
+                    <h2>КАРТОЧКА ВАКАНСИИ</h2>
+                    <div class="badge" id="selectedBadge">Не выбрана</div>
+                </div>
+ 
+                <div id="selectedVacancy">
+                    <div class="selected-empty">
+                        Выберите вакансию из списка. Здесь откроется подробная карточка вакансии со ссылкой и реквизитами.
+                    </div>
+                </div>
+            </section>
+ 
+ 
+            <div class="vacancy-modal" id="manualIntakeModal" aria-hidden="true">
+                <div class="vacancy-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="manualIntakeModalTitle">
+                    <div class="vacancy-modal-header">
+                        <div>
+                            <div class="vacancy-modal-kicker">Ручной ввод вакансии</div>
+                            <h2 class="vacancy-modal-title" id="manualIntakeModalTitle">Добавить вакансию вручную</h2>
+                            <div class="vacancy-modal-company">Вставьте данные вакансии из Telegram, письма, чата или внешней ссылки.</div>
+                        </div>
+                        <div class="vacancy-modal-side">
+                            <div class="vacancy-modal-brand">
+                                <img src="{{ url_for('static', filename='logo-white.png') }}" alt="Лаборатория влияния">
+                            </div>
+                            <button type="button" class="vacancy-modal-close" id="manualIntakeModalClose" aria-label="Закрыть">×</button>
+                        </div>
+                    </div>
+                    <div class="vacancy-modal-content">
+                        <div class="manual-intake-form">
+                            <div class="manual-intake-grid">
+                                <label class="manual-intake-field">
+                                    <span class="manual-intake-label">Должность *</span>
+                                    <input type="text" class="manual-intake-input" id="manualVacancyTitle" placeholder="Например: Коммерческий директор">
+                                </label>
+                                <label class="manual-intake-field">
+                                    <span class="manual-intake-label">Компания</span>
+                                    <input type="text" class="manual-intake-input" id="manualVacancyCompany" placeholder="Например: Test Company">
+                                </label>
+                                <label class="manual-intake-field">
+                                    <span class="manual-intake-label">Локация</span>
+                                    <input type="text" class="manual-intake-input" id="manualVacancyLocation" placeholder="Например: Москва / Remote">
+                                </label>
+                                <label class="manual-intake-field">
+                                    <span class="manual-intake-label">Ссылка на источник</span>
+                                    <input type="url" class="manual-intake-input" id="manualVacancyUrl" placeholder="https://example.com/vacancy">
+                                </label>
+                                <label class="manual-intake-field full">
+                                    <span class="manual-intake-label">Описание вакансии *</span>
+                                    <textarea class="manual-intake-textarea" id="manualVacancyDescription" placeholder="Вставьте сюда текст вакансии, требования, задачи, условия и любые примечания."></textarea>
+                                </label>
+                            </div>
+                            <div class="manual-intake-status" id="manualIntakeStatus"></div>
+                            <div class="vacancy-modal-actions">
+                                <button type="button" class="action-btn" id="submitManualIntakeBtn">СОХРАНИТЬ ВАКАНСИЮ</button>
+                                <button type="button" class="action-btn" id="cancelManualIntakeBtn">ОТМЕНА</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+ 
+            <div class="vacancy-modal" id="vacancyModal" aria-hidden="true">
+                <div class="vacancy-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="vacancyModalTitle">
+                    <div class="vacancy-modal-header">
+                        <div>
+                            <div class="vacancy-modal-kicker" id="vacancyModalKicker">Карточка вакансии</div>
+                            <h2 class="vacancy-modal-title" id="vacancyModalTitle">Вакансия</h2>
+                            <div class="vacancy-modal-company" id="vacancyModalCompany">Компания</div>
+                        </div>
+                        <div class="vacancy-modal-side">
+                            <div class="vacancy-modal-brand">
+                                <img src="{{ url_for('static', filename='logo-white.png') }}" alt="Лаборатория влияния">
+                            </div>
+                            <button type="button" class="vacancy-modal-close" id="vacancyModalClose" aria-label="Закрыть">×</button>
+                        </div>
+                    </div>
+                    <div class="vacancy-modal-content" id="vacancyModalContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+ 
+    <script>
+        (function () {
+            const root = document.getElementById('pageRoot');
+            const requestId = root.dataset.requestId;
+ 
+            const vacancyBadge = document.getElementById('vacancyBadge');
+            const selectedBadge = document.getElementById('selectedBadge');
+            const vacancyList = document.getElementById('vacancyList');
+            const vacancyEmpty = document.getElementById('vacancyEmpty');
+            const selectedVacancy = document.getElementById('selectedVacancy');
+            const vacancyModal = document.getElementById('vacancyModal');
+            const vacancyModalClose = document.getElementById('vacancyModalClose');
+            const vacancyModalTitle = document.getElementById('vacancyModalTitle');
+            const vacancyModalCompany = document.getElementById('vacancyModalCompany');
+            const vacancyModalKicker = document.getElementById('vacancyModalKicker');
+            const vacancyModalContent = document.getElementById('vacancyModalContent');
+ 
+            const manualIntakeModal = document.getElementById('manualIntakeModal');
+            const manualIntakeModalClose = document.getElementById('manualIntakeModalClose');
+            const openManualIntakeBtn = document.getElementById('openManualIntakeBtn');
+            const submitManualIntakeBtn = document.getElementById('submitManualIntakeBtn');
+            const cancelManualIntakeBtn = document.getElementById('cancelManualIntakeBtn');
+            const manualVacancyTitle = document.getElementById('manualVacancyTitle');
+            const manualVacancyCompany = document.getElementById('manualVacancyCompany');
+            const manualVacancyLocation = document.getElementById('manualVacancyLocation');
+            const manualVacancyUrl = document.getElementById('manualVacancyUrl');
+            const manualVacancyDescription = document.getElementById('manualVacancyDescription');
+            const manualIntakeStatus = document.getElementById('manualIntakeStatus');
+ 
+            const vacanciesPanel = document.getElementById('vacanciesPanel');
+            const selectedPanel = document.getElementById('selectedPanel');
+ 
+            const noticeBox = document.getElementById('noticeBox');
+            const noticeTitle = document.getElementById('noticeTitle');
+            const noticeText = document.getElementById('noticeText');
+            const statusLine = document.getElementById('statusLine');
+ 
+            const toggleListBtn = document.getElementById('toggleListBtn');
+            const printListBtn = document.getElementById('printListBtn');
+            const downloadListDocxBtn = document.getElementById('downloadListDocxBtn');
+ 
+            const music = document.getElementById('resultsMusic');
+            const audioToggle = document.getElementById('audio-toggle');
+ 
+            let audioEnabled = false;
+            let audioContext = null;
+            let statusPollTimer = null;
+            let vacanciesPollTimer = null;
+ 
+            let allVacancies = [];
+            let selectedIndex = -1;
+            let latestVacanciesSignature = '';
+            let previousPrintOpenStates = null;
+ 
+            function ensureAudioContext() {
+                if (!audioContext) {
+                    const Ctx = window.AudioContext || window.webkitAudioContext;
+                    if (Ctx) {
+                        audioContext = new Ctx();
+                    }
+                }
+                return audioContext;
+            }
+ 
+            function playClickSound() {
+                if (!audioEnabled) {
+                    return;
+                }
+ 
+                const ctx = ensureAudioContext();
+                if (!ctx) {
+                    return;
+                }
+ 
+                if (ctx.state === 'suspended') {
+                    ctx.resume().catch(() => {});
+                }
+ 
+                const oscillator = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+ 
+                oscillator.type = 'triangle';
+                oscillator.frequency.setValueAtTime(720, ctx.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(420, ctx.currentTime + 0.08);
+ 
+                gainNode.gain.setValueAtTime(0.0001, ctx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.09, ctx.currentTime + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.11);
+ 
+                oscillator.connect(gainNode);
+                gainNode.connect(ctx.destination);
+ 
+                oscillator.start();
+                oscillator.stop(ctx.currentTime + 0.12);
+            }
+ 
+            function syncAudioButton() {
+                audioToggle.textContent = audioEnabled ? 'Музыка: вкл' : 'Музыка: выкл';
+            }
+ 
+            function startMusic() {
+                if (!music) {
+                    return;
+                }
+                const playPromise = music.play();
+                if (playPromise && typeof playPromise.catch === 'function') {
+                    playPromise.catch(() => {});
+                }
+            }
+ 
+            function stopMusic() {
+                if (!music) {
+                    return;
+                }
+                music.pause();
+            }
+ 
+            audioToggle.addEventListener('click', function () {
+                if (audioEnabled) {
+                    playClickSound();
+                    audioEnabled = false;
+                    stopMusic();
+                    syncAudioButton();
+                    return;
+                }
+ 
+                audioEnabled = true;
+                syncAudioButton();
+                startMusic();
+ 
+                const ctx = ensureAudioContext();
+                if (ctx && ctx.state === 'suspended') {
+                    ctx.resume().catch(() => {});
+                }
+ 
+                playClickSound();
+            });
+ 
+            document.addEventListener('click', function (event) {
+                const clickable = event.target.closest('button, a, summary');
+                if (!clickable) {
+                    return;
+                }
+                if (clickable.id === 'audio-toggle') {
+                    return;
+                }
+                playClickSound();
+            });
+ 
+            syncAudioButton();
+ 
+            function escapeHtml(value) {
+                return String(value || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+ 
+            function shorten(text, maxLength) {
+                const safe = String(text || '').trim();
+                if (!safe) {
+                    return '';
+                }
+                if (safe.length <= maxLength) {
+                    return safe;
+                }
+                return `${safe.slice(0, maxLength).trim()}…`;
+            }
+ 
+            function formatDate(value) {
+                if (!value) {
+                    return '';
+                }
+ 
+                const parsed = new Date(value);
+                if (Number.isNaN(parsed.getTime())) {
+                    return '';
+                }
+ 
+                try {
+                    return parsed.toLocaleString('ru-RU', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                } catch (error) {
+                    return '';
+                }
+            }
+ 
+            function normalizeStatus(rawStatus, rawTaskStatus) {
+                const joined = `${String(rawStatus || '').toLowerCase()} ${String(rawTaskStatus || '').toLowerCase()}`;
+ 
+                if (joined.includes('completed') || joined.includes('done') || joined.includes('success')) {
+                    return 'completed';
+                }
+                if (joined.includes('running') || joined.includes('started') || joined.includes('processing') || joined.includes('parsing')) {
+                    return 'running';
+                }
+                if (joined.includes('queued') || joined.includes('waiting') || joined.includes('pending')) {
+                    return 'queued';
+                }
+                if (joined.includes('error') || joined.includes('failed') || joined.includes('failure')) {
+                    return 'failed';
+                }
+ 
+                return 'unknown';
+            }
+ 
+            function normalizeVacancies(payload) {
+                if (Array.isArray(payload)) {
+                    return payload;
+                }
+                if (payload && Array.isArray(payload.vacancies)) {
+                    return payload.vacancies;
+                }
+                if (payload && Array.isArray(payload.items)) {
+                    return payload.items;
+                }
+                if (payload && Array.isArray(payload.data)) {
+                    return payload.data;
+                }
+                return [];
+            }
+ 
+            function getVacancyTitle(item, index) {
+                return item.title || item.position || item.vacancy_name || item.name || `Вакансия ${index + 1}`;
+            }
+ 
+            function getVacancyCompany(item) {
+                return item.company || item.company_name || item.employer || item.organization || 'Компания не указана';
+            }
+ 
+            function getVacancyUrl(item) {
+                return item.url || item.link || item.vacancy_url || item.source_url || '';
+            }
+ 
+            function getVacancyDescription(item) {
+                return item.description || item.summary || item.ai_summary || item.snippet || item.requirements || '';
+            }
+ 
+            function getVacancyLocation(item) {
+                return item.location || item.city || item.region || '';
+            }
+ 
+            function getVacancySalary(item) {
+                return item.salary || item.salary_text || item.compensation || '';
+            }
+ 
+            function getVacancySource(item) {
+                return item.source || item.vacancy_source || item.platform || '';
+            }
+ 
+            function getVacancyCreatedAt(item) {
+                return item.created_at || item.published_at || item.date || '';
+            }
+ 
+            function getVacancyScore(item) {
+                if (item.ai_score === null || item.ai_score === undefined || item.ai_score === '') {
+                    return '';
+                }
+                return `AI score: ${item.ai_score}`;
+            }
+ 
+            function getVacancyTags(item) {
+                if (Array.isArray(item.ai_tags)) {
+                    return item.ai_tags.filter(Boolean);
+                }
+                if (typeof item.ai_tags === 'string' && item.ai_tags.trim()) {
+                    return item.ai_tags.split(',').map(function (tag) {
+                        return tag.trim();
+                    }).filter(Boolean);
+                }
+                return [];
+            }
+ 
+            function buildMetaChips(item) {
+                const chips = [];
+                const location = getVacancyLocation(item);
+                const salary = getVacancySalary(item);
+                const source = getVacancySource(item);
+                const createdAt = formatDate(getVacancyCreatedAt(item));
+                const score = getVacancyScore(item);
+ 
+                if (location) {
+                    chips.push(`<span class="meta-chip">${escapeHtml(location)}</span>`);
+                }
+                if (salary) {
+                    chips.push(`<span class="meta-chip">${escapeHtml(salary)}</span>`);
+                }
+                if (source) {
+                    chips.push(`<span class="meta-chip">${escapeHtml(source)}</span>`);
+                }
+                if (score) {
+                    chips.push(`<span class="meta-chip">${escapeHtml(score)}</span>`);
+                }
+                if (createdAt) {
+                    chips.push(`<span class="meta-chip">${escapeHtml(createdAt)}</span>`);
+                }
+ 
+                return chips.join('');
+            }
+ 
+            function buildVacancyCard(item, originalIndex) {
+                const title = escapeHtml(getVacancyTitle(item, originalIndex));
+                const company = escapeHtml(getVacancyCompany(item));
+                const description = escapeHtml(getVacancyDescription(item));
+                const url = getVacancyUrl(item);
+ 
+                return `
+                    <details class="vacancy-card" data-index="${originalIndex}">
+                        <summary class="vacancy-summary">
+                            <div class="vacancy-top">
+                                <div class="vacancy-title-block">
+                                    <div class="vacancy-title">${title}</div>
+                                    <div class="vacancy-company">${company}</div>
+                                </div>
+                                <div class="badge">#${originalIndex + 1}</div>
+                            </div>
+                            <div class="vacancy-meta">
+                                ${buildMetaChips(item)}
+                            </div>
+                        </summary>
+                        <div class="vacancy-body">
+                            <p>${description ? shorten(description, 900) : 'Описание вакансии пока недоступно.'}</p>
+                            <div class="vacancy-actions">
+                                <button type="button" class="action-btn open-vacancy-btn" data-index="${originalIndex}">
+                                    КАРТОЧКА ВАКАНСИИ
+                                </button>
+                                ${url ? `<a class="vacancy-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">ССЫЛКА НА ИСТОЧНИК</a>` : ''}
+                            </div>
+                        </div>
+                    </details>
+                `;
+            }
+ 
+            function closeVacancyModal() {
+                if (!vacancyModal) {
+                    return;
+                }
+                vacancyModal.classList.remove('visible');
+                vacancyModal.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+            }
+ 
+            function setManualIntakeStatus(message, type) {
+                if (!manualIntakeStatus) {
+                    return;
+                }
+                manualIntakeStatus.textContent = message || '';
+                manualIntakeStatus.classList.remove('error', 'success');
+                if (type) {
+                    manualIntakeStatus.classList.add(type);
+                }
+            }
+ 
+            function clearManualIntakeForm() {
+                if (manualVacancyTitle) manualVacancyTitle.value = '';
+                if (manualVacancyCompany) manualVacancyCompany.value = '';
+                if (manualVacancyLocation) manualVacancyLocation.value = '';
+                if (manualVacancyUrl) manualVacancyUrl.value = '';
+                if (manualVacancyDescription) manualVacancyDescription.value = '';
+                setManualIntakeStatus('', '');
+            }
+ 
+            function openManualIntakeModal() {
+                if (!manualIntakeModal) {
+                    return;
+                }
+                setManualIntakeStatus('', '');
+                manualIntakeModal.classList.add('visible');
+                manualIntakeModal.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+                if (manualVacancyTitle) {
+                    window.setTimeout(function () {
+                        manualVacancyTitle.focus();
+                    }, 60);
+                }
+            }
+ 
+            function closeManualIntakeModal() {
+                if (!manualIntakeModal) {
+                    return;
+                }
+                manualIntakeModal.classList.remove('visible');
+                manualIntakeModal.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+            }
+ 
+            async function submitManualIntake() {
+                const payload = {
+                    job_request_id: Number(requestId),
+                    title: (manualVacancyTitle && manualVacancyTitle.value || '').trim(),
+                    company: (manualVacancyCompany && manualVacancyCompany.value || '').trim(),
+                    location: (manualVacancyLocation && manualVacancyLocation.value || '').trim(),
+                    url: (manualVacancyUrl && manualVacancyUrl.value || '').trim(),
+                    description: (manualVacancyDescription && manualVacancyDescription.value || '').trim()
+                };
+ 
+                if (!payload.title) {
+                    setManualIntakeStatus('Укажите должность вакансии.', 'error');
+                    if (manualVacancyTitle) {
+                        manualVacancyTitle.focus();
+                    }
+                    return;
+                }
+ 
+                if (!payload.description) {
+                    setManualIntakeStatus('Добавьте описание вакансии или её основные требования.', 'error');
+                    if (manualVacancyDescription) {
+                        manualVacancyDescription.focus();
+                    }
+                    return;
+                }
+ 
+                setManualIntakeStatus('Сохраняем вакансию…', '');
+ 
+                if (submitManualIntakeBtn) {
+                    submitManualIntakeBtn.disabled = true;
+                }
+ 
+                try {
+                    const response = await fetch('/api/v1/vacancy-intake/manual', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+ 
+                    const data = await response.json().catch(function () {
+                        return {};
+                    });
+ 
+                    if (!response.ok) {
+                        throw new Error(data.error || `HTTP ${response.status}`);
+                    }
+ 
+                    setManualIntakeStatus('Вакансия сохранена. Обновляем список…', 'success');
+                    await pollVacancies();
+                    await pollStatus();
+                    clearManualIntakeForm();
+                    closeManualIntakeModal();
+                    vacanciesPanel.style.display = '';
+                    statusLine.textContent = 'Ручная вакансия добавлена в результаты и доступна в списке.';
+                } catch (error) {
+                    setManualIntakeStatus(`Не удалось сохранить вакансию: ${error.message}`, 'error');
+                } finally {
+                    if (submitManualIntakeBtn) {
+                        submitManualIntakeBtn.disabled = false;
+                    }
+                }
+            }
+ 
+            function renderSelectedVacancy(item, index) {
+                if (!item || index < 0) {
+                    selectedBadge.textContent = 'Не выбрана';
+                    selectedVacancy.innerHTML = `
+                        <div class="selected-empty">
+                            Выберите вакансию из списка. Здесь откроется подробная карточка вакансии со ссылкой и реквизитами.
+                        </div>
+                    `;
+                    if (vacancyModalContent) {
+                        vacancyModalTitle.textContent = 'Вакансия';
+                        vacancyModalCompany.textContent = 'Компания';
+                        vacancyModalKicker.textContent = 'Карточка вакансии';
+                        vacancyModalContent.innerHTML = '';
+                    }
+                    return;
+                }
+ 
+                const title = escapeHtml(getVacancyTitle(item, index));
+                const company = escapeHtml(getVacancyCompany(item));
+                const description = escapeHtml(getVacancyDescription(item) || 'Описание вакансии пока недоступно.');
+                const url = getVacancyUrl(item);
+                const location = escapeHtml(getVacancyLocation(item) || '—');
+                const salary = escapeHtml(getVacancySalary(item) || '—');
+                const source = escapeHtml(getVacancySource(item) || '—');
+                const createdAt = escapeHtml(formatDate(getVacancyCreatedAt(item)) || '—');
+                const score = escapeHtml(getVacancyScore(item) || '—');
+                const tags = getVacancyTags(item);
+ 
+                const facts = [
+                    ['Локация', location],
+                    ['Оплата', salary],
+                    ['Источник', source],
+                    ['Дата', createdAt],
+                    ['AI score', score],
+                    ['Теги', tags.length ? escapeHtml(tags.join(', ')) : '—']
+                ];
+ 
+                selectedBadge.textContent = `#${index + 1}`;
+ 
+                if (vacancyModalContent) {
+                    vacancyModalTitle.innerHTML = title;
+                    vacancyModalCompany.innerHTML = company;
+                    vacancyModalKicker.textContent = `Карточка вакансии #${index + 1}`;
+ 
+                    vacancyModalContent.innerHTML = `
+                        <div class="vacancy-modal-section">
+                            <div class="vacancy-modal-facts">
+                                ${facts.map(function (fact) {
+                                    return `
+                                        <div class="vacancy-modal-fact">
+                                            <div class="vacancy-modal-fact-label">${fact[0]}</div>
+                                            <div class="vacancy-modal-fact-value">${fact[1]}</div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+ 
+                        <div class="vacancy-modal-section">
+                            <h3>Описание вакансии</h3>
+                            <p>${description}</p>
+                        </div>
+ 
+                        <div class="vacancy-modal-section">
+                            <h3>Действия</h3>
+                            <div class="vacancy-modal-actions">
+                                ${url ? `<a class="vacancy-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">ОТКРЫТЬ ИСТОЧНИК</a>` : ''}
+                                <button type="button" class="action-btn" id="printSelectedBtn">ПЕЧАТЬ ВАКАНСИИ</button>
+                                <button type="button" class="action-btn" id="downloadSelectedDocxBtn">DOCX ВАКАНСИИ</button>
+                            </div>
+                        </div>
+                    `;
+ 
+                    const printSelectedBtn = document.getElementById('printSelectedBtn');
+                    const downloadSelectedDocxBtn = document.getElementById('downloadSelectedDocxBtn');
+ 
+                    if (printSelectedBtn) {
+                        printSelectedBtn.addEventListener('click', function () {
+                            printSingleVacancy(index);
+                        });
+                    }
+ 
+                    if (downloadSelectedDocxBtn) {
+                        downloadSelectedDocxBtn.addEventListener('click', function () {
+                            downloadSingleVacancyDocx(index);
+                        });
+                    }
+                }
+            }
+ 
+            function openVacancyModal(index) {
+                if (index < 0 || !allVacancies[index]) {
+                    return;
+                }
+ 
+                selectedIndex = index;
+                renderSelectedVacancy(allVacancies[index], index);
+ 
+                if (vacancyModal) {
+                    vacancyModal.classList.add('visible');
+                    vacancyModal.setAttribute('aria-hidden', 'false');
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+ 
+            function selectVacancy(index) {
+                if (index < 0 || !allVacancies[index]) {
+                    selectedIndex = -1;
+                    renderSelectedVacancy(null, -1);
+                    return;
+                }
+ 
+                selectedIndex = index;
+                renderSelectedVacancy(allVacancies[index], index);
+            }
+ 
+            function updateVacancies(data) {
+                const safeVacancies = normalizeVacancies(data);
+                const signature = JSON.stringify(safeVacancies.map(function (item, index) {
+                    return [
+                        getVacancyTitle(item, index),
+                        getVacancyCompany(item),
+                        getVacancyUrl(item),
+                        item.created_at || '',
+                        item.description || ''
+                    ];
+                }));
+ 
+                vacancyBadge.textContent = `${safeVacancies.length} ${safeVacancies.length === 1 ? 'позиция' : 'позиций'}`;
+ 
+                if (signature === latestVacanciesSignature) {
+                    return;
+                }
+ 
+                latestVacanciesSignature = signature;
+                allVacancies = safeVacancies;
+ 
+                if (!allVacancies.length) {
+                    vacancyList.innerHTML = '';
+                    vacancyList.appendChild(vacancyEmpty);
+                    selectedPanel.style.display = 'none';
+                    return;
+                }
+ 
+                vacancyList.innerHTML = allVacancies.map(function (item, index) {
+                    return buildVacancyCard(item, index);
+                }).join('');
+ 
+                if (selectedIndex < 0 || !allVacancies[selectedIndex]) {
+                    selectVacancy(0);
+                } else {
+                    renderSelectedVacancy(allVacancies[selectedIndex], selectedIndex);
+                }
+            }
+ 
+            async function pollVacancies() {
+                try {
+                    const response = await fetch(`/api/v1/vacancies/${requestId}`, {
+                        method: 'GET',
+                        headers: { 'Accept': 'application/json' },
+                        cache: 'no-store'
+                    });
+ 
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+ 
+                    const data = await response.json();
+                    updateVacancies(data);
+                } catch (error) {
+                    statusLine.textContent = 'Не удалось обновить список вакансий. Повторяем попытку автоматически.';
+                }
+            }
+ 
+            async function pollStatus() {
+                try {
+                    const response = await fetch(`/api/v1/status/${requestId}`, {
+                        method: 'GET',
+                        headers: { 'Accept': 'application/json' },
+                        cache: 'no-store'
+                    });
+ 
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+ 
+                    const data = await response.json();
+                    const safeStatus = normalizeStatus(data.status, data.task_status);
+ 
+                    if (safeStatus === 'completed') {
+                        noticeBox.classList.remove('visible');
+                        statusLine.textContent = 'Результаты готовы. Можно просматривать вакансии, сохранять DOCX или печатать.';
+                    } else if (safeStatus === 'running') {
+                        noticeBox.classList.add('visible');
+                        noticeTitle.textContent = 'Результат ещё уточняется';
+                        noticeText.textContent = 'Парсинг ещё может обновлять список вакансий. Страница продолжит автоматически подгружать данные.';
+                    } else if (safeStatus === 'queued') {
+                        noticeBox.classList.add('visible');
+                        noticeTitle.textContent = 'Заявка ещё в очереди';
+                        noticeText.textContent = 'Часть данных может появиться позже. Страница продолжит автоматически обновлять вакансии.';
+                    } else if (safeStatus === 'failed') {
+                        noticeBox.classList.add('visible');
+                        noticeTitle.textContent = 'Во время обработки возникла ошибка';
+                        noticeText.textContent = 'Если часть вакансий уже была собрана, она останется доступной. Страница продолжит автоматически проверять обновления.';
+                    }
+                } catch (error) {
+                    statusLine.textContent = 'Связь обновляется. Повторяем запрос автоматически.';
+                }
+            }
+ 
+            function prepareListPrint() {
+                previousPrintOpenStates = Array.from(document.querySelectorAll('details.vacancy-card')).map(function (details) {
+                    return details.open;
+                });
+ 
+                Array.from(document.querySelectorAll('details.vacancy-card')).forEach(function (details) {
+                    details.open = true;
+                });
+ 
+                window.print();
+            }
+ 
+            function printSingleVacancy(index) {
+                if (index < 0 || !allVacancies[index]) {
+                    alert('Сначала выберите вакансию.');
+                    return;
+                }
+ 
+                selectVacancy(index);
+ 
+                const originalListDisplay = vacanciesPanel.style.display;
+                vacanciesPanel.style.display = 'none';
+                window.print();
+                setTimeout(function () {
+                    vacanciesPanel.style.display = originalListDisplay;
+                }, 100);
+            }
+ 
+            window.addEventListener('afterprint', function () {
+                if (Array.isArray(previousPrintOpenStates)) {
+                    const cards = Array.from(document.querySelectorAll('details.vacancy-card'));
+                    cards.forEach(function (details, index) {
+                        details.open = !!previousPrintOpenStates[index];
+                    });
+                }
+ 
+                previousPrintOpenStates = null;
+            });
+ 
+            function fileNameSafe(value) {
+                return String(value || 'vacancy')
+                    .replace(/[\\/:*?"<>|]+/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .slice(0, 80) || 'vacancy';
+            }
+ 
+            function downloadBlob(blob, filename) {
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(function () {
+                    URL.revokeObjectURL(url);
+                }, 1000);
+            }
+ 
+            function createParagraph(text, options) {
+                const docxLib = window.docx;
+                return new docxLib.Paragraph(Object.assign({
+                    children: [
+                        new docxLib.TextRun({
+                            text: String(text || ''),
+                            size: 24
+                        })
+                    ]
+                }, options || {}));
+            }
+ 
+            function createLabeledParagraph(label, value) {
+                const docxLib = window.docx;
+                return new docxLib.Paragraph({
+                    spacing: { after: 160 },
+                    children: [
+                        new docxLib.TextRun({
+                            text: `${label}: `,
+                            bold: true,
+                            size: 24
+                        }),
+                        new docxLib.TextRun({
+                            text: String(value || '—'),
+                            size: 24
+                        })
+                    ]
+                });
+            }
+ 
+            function createHyperlinkParagraph(label, url) {
+                const docxLib = window.docx;
+                return new docxLib.Paragraph({
+                    spacing: { after: 220 },
+                    children: [
+                        new docxLib.TextRun({
+                            text: `${label}: `,
+                            bold: true,
+                            size: 24
+                        }),
+                        new docxLib.ExternalHyperlink({
+                            link: url,
+                            children: [
+                                new docxLib.TextRun({
+                                    text: url,
+                                    style: 'Hyperlink',
+                                    size: 24
+                                })
+                            ]
+                        })
+                    ]
+                });
+            }
+ 
+            async function buildSingleVacancyDocx(index) {
+                const docxLib = window.docx;
+                const item = allVacancies[index];
+ 
+                if (!docxLib || !item) {
+                    throw new Error('DOCX библиотека или вакансия недоступны.');
+                }
+ 
+                const title = getVacancyTitle(item, index);
+                const company = getVacancyCompany(item);
+                const url = getVacancyUrl(item);
+                const description = getVacancyDescription(item) || 'Описание вакансии пока недоступно.';
+                const location = getVacancyLocation(item) || '—';
+                const salary = getVacancySalary(item) || '—';
+                const source = getVacancySource(item) || '—';
+                const createdAt = formatDate(getVacancyCreatedAt(item)) || '—';
+                const score = getVacancyScore(item) || '—';
+                const tags = getVacancyTags(item).join(', ') || '—';
+ 
+                const children = [
+                    new docxLib.Paragraph({
+                        text: 'Результаты парсинга — отдельная вакансия',
+                        heading: docxLib.HeadingLevel.HEADING_1,
+                        spacing: { after: 240 }
+                    }),
+                    createLabeledParagraph('Заявка', `#${requestId}`),
+                    createLabeledParagraph('Должность', title),
+                    createLabeledParagraph('Компания', company),
+                    createLabeledParagraph('Локация', location),
+                    createLabeledParagraph('Оплата', salary),
+                    createLabeledParagraph('Источник', source),
+                    createLabeledParagraph('Дата', createdAt),
+                    createLabeledParagraph('AI score', score),
+                    createLabeledParagraph('Теги', tags),
+                    createParagraph('Описание', {
+                        heading: docxLib.HeadingLevel.HEADING_2,
+                        spacing: { before: 160, after: 140 }
+                    }),
+                    createParagraph(description, {
+                        spacing: { after: 220 }
+                    })
+                ];
+ 
+                if (url) {
+                    children.push(createHyperlinkParagraph('Ссылка на источник', url));
+                }
+ 
+                const doc = new docxLib.Document({
+                    sections: [{
+                        properties: {},
+                        children: children
+                    }]
+                });
+ 
+                return docxLib.Packer.toBlob(doc);
+            }
+ 
+            async function buildVacancyListDocx(items) {
+                const docxLib = window.docx;
+ 
+                if (!docxLib) {
+                    throw new Error('DOCX библиотека недоступна.');
+                }
+ 
+                const children = [
+                    new docxLib.Paragraph({
+                        text: 'Результаты парсинга — список вакансий',
+                        heading: docxLib.HeadingLevel.HEADING_1,
+                        spacing: { after: 240 }
+                    }),
+                    createLabeledParagraph('Заявка', `#${requestId}`),
+                    createLabeledParagraph('Количество вакансий', String(items.length))
+                ];
+ 
+                items.forEach(function (item, index) {
+                    const title = getVacancyTitle(item, index);
+                    const company = getVacancyCompany(item);
+                    const url = getVacancyUrl(item);
+                    const description = shorten(getVacancyDescription(item) || 'Описание вакансии пока недоступно.', 2000);
+                    const location = getVacancyLocation(item) || '—';
+                    const salary = getVacancySalary(item) || '—';
+                    const source = getVacancySource(item) || '—';
+                    const createdAt = formatDate(getVacancyCreatedAt(item)) || '—';
+ 
+                    children.push(
+                        new docxLib.Paragraph({
+                            text: `Вакансия ${index + 1}`,
+                            heading: docxLib.HeadingLevel.HEADING_2,
+                            spacing: { before: 280, after: 120 }
+                        }),
+                        createLabeledParagraph('Должность', title),
+                        createLabeledParagraph('Компания', company),
+                        createLabeledParagraph('Локация', location),
+                        createLabeledParagraph('Оплата', salary),
+                        createLabeledParagraph('Источник', source),
+                        createLabeledParagraph('Дата', createdAt),
+                        createParagraph(description, {
+                            spacing: { after: 180 }
+                        })
+                    );
+ 
+                    if (url) {
+                        children.push(createHyperlinkParagraph('Ссылка на источник', url));
+                    }
+                });
+ 
+                const doc = new docxLib.Document({
+                    sections: [{
+                        properties: {},
+                        children: children
+                    }]
+                });
+ 
+                return docxLib.Packer.toBlob(doc);
+            }
+ 
+            async function downloadSingleVacancyDocx(index) {
+                if (index < 0 || !allVacancies[index]) {
+                    alert('Сначала выберите вакансию.');
+                    return;
+                }
+ 
+                try {
+                    const blob = await buildSingleVacancyDocx(index);
+                    const title = fileNameSafe(getVacancyTitle(allVacancies[index], index));
+                    downloadBlob(blob, `vacancy_${title}.docx`);
+                } catch (error) {
+                    alert('Не удалось сформировать DOCX для отдельной вакансии.');
+                }
+            }
+ 
+            async function downloadListDocx() {
+                if (!allVacancies.length) {
+                    alert('Нет вакансий для сохранения в DOCX.');
+                    return;
+                }
+ 
+                try {
+                    const blob = await buildVacancyListDocx(allVacancies);
+                    downloadBlob(blob, `vacancies_request_${requestId}.docx`);
+                } catch (error) {
+                    alert('Не удалось сформировать DOCX со списком вакансий.');
+                }
+            }
+ 
+            toggleListBtn.addEventListener('click', function () {
+                const shouldShow = vacanciesPanel.style.display === 'none';
+                vacanciesPanel.style.display = shouldShow ? '' : 'none';
+            });
+ 
+            vacancyList.addEventListener('click', function (event) {
+                const openBtn = event.target.closest('.open-vacancy-btn');
+                if (openBtn) {
+                    openVacancyModal(Number(openBtn.dataset.index));
+                    return;
+                }
+            });
+ 
+            if (vacancyModalClose) {
+                vacancyModalClose.addEventListener('click', function () {
+                    closeVacancyModal();
+                });
+            }
+ 
+            if (vacancyModal) {
+                vacancyModal.addEventListener('click', function (event) {
+                    if (event.target === vacancyModal) {
+                        closeVacancyModal();
+                    }
+                });
+            }
+ 
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    closeVacancyModal();
+                    closeManualIntakeModal();
+                }
+            });
+ 
+            if (openManualIntakeBtn) {
+                openManualIntakeBtn.addEventListener('click', function () {
+                    openManualIntakeModal();
+                });
+            }
+ 
+            if (manualIntakeModalClose) {
+                manualIntakeModalClose.addEventListener('click', function () {
+                    closeManualIntakeModal();
+                });
+            }
+ 
+            if (cancelManualIntakeBtn) {
+                cancelManualIntakeBtn.addEventListener('click', function () {
+                    closeManualIntakeModal();
+                });
+            }
+ 
+            if (submitManualIntakeBtn) {
+                submitManualIntakeBtn.addEventListener('click', function () {
+                    submitManualIntake();
+                });
+            }
+ 
+            if (manualIntakeModal) {
+                manualIntakeModal.addEventListener('click', function (event) {
+                    if (event.target === manualIntakeModal) {
+                        closeManualIntakeModal();
+                    }
+                });
+            }
+ 
+            printListBtn.addEventListener('click', function () {
+                prepareListPrint();
+            });
+ 
+            downloadListDocxBtn.addEventListener('click', function () {
+                downloadListDocx();
+            });
+ 
+            pollStatus();
+            pollVacancies();
+ 
+            statusPollTimer = window.setInterval(pollStatus, 7000);
+            vacanciesPollTimer = window.setInterval(pollVacancies, 8000);
+ 
+            window.addEventListener('beforeunload', function () {
+                if (statusPollTimer) {
+                    clearInterval(statusPollTimer);
+                }
+                if (vacanciesPollTimer) {
+                    clearInterval(vacanciesPollTimer);
+                }
+            });
+        })();
+    </script>
+</body>
+</html>
