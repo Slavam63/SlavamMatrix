@@ -20,7 +20,7 @@
   --shadow: 0 8px 28px rgba(15, 39, 68, 0.08);
   --font: "Segoe UI", "Helvetica Neue", Arial, "Noto Sans", sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji";
-  --transition: 280ms ease;
+  --motion: 280ms;
   --max: 1080px;
 }
 
@@ -86,16 +86,25 @@ a {
 
 .screen {
   display: none;
-  opacity: 0;
-  transform: translateY(10px);
 }
 
+/* Base visibility so an invalid/missing animation cannot leave content at opacity:0 */
 .screen--active {
   display: block;
-  animation: screen-in var(--transition) ease both;
+  opacity: 1;
+  transform: none;
+  /* --motion is duration only; do not put easing in the variable */
+  animation: screen-in var(--motion) ease both;
+}
+
+/* UA [hidden] is display:none !important; keep that explicit for screen sections */
+.screen[hidden] {
+  display: none !important;
+  animation: none;
 }
 
 .screen.is-leaving {
+  display: block;
   animation: screen-out 220ms ease both;
 }
 
@@ -123,7 +132,7 @@ a {
 
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --transition: 1ms;
+    --motion: 1ms;
   }
 
   .screen--active,
