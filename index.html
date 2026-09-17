@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="CASTDEV — студия casting и digital-разработки. Собираем команды и запускаем продукты." />
+  <title>CASTDEV — casting &amp; development</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">К содержанию</a>
+
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="logo" href="#top" aria-label="CASTDEV — наверх">CASTDEV</a>
+      <nav class="nav" aria-label="Основная навигация">
+        <a href="#essence">Суть</a>
+        <a href="#method">Метод</a>
+        <a href="#contact">Связаться</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section id="top" class="hero" aria-label="Главный экран">
+      <div class="hero__media" aria-hidden="true">
+        <img
+          src="assets/img/hero.jpg"
+          alt=""
+          width="1280"
+          height="720"
+          fetchpriority="high"
+        />
+      </div>
+      <div class="hero__veil" aria-hidden="true"></div>
+      <div class="hero__content">
+        <p class="brand" data-motion="rise">CASTDEV</p>
+        <h1 class="hero__title" data-motion="rise" data-delay="1">
+          Casting команд.<br />Development продуктов.
+        </h1>
+        <p class="hero__lead" data-motion="rise" data-delay="2">
+          Собираем людей и собираем системы — от первого кастинга до рабочего релиза.
+        </p>
+        <div class="hero__cta" data-motion="rise" data-delay="3">
+          <a class="btn btn--primary" href="#contact">Обсудить проект</a>
+          <a class="btn btn--ghost" href="#essence">Как мы работаем</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="essence" class="section section--essence" data-reveal>
+      <div class="section__grid">
+        <div class="section__copy">
+          <p class="eyebrow">Суть</p>
+          <h2>Где подбор людей и инженерия — одна дисциплина</h2>
+          <p>
+            CASTDEV0926 — практика на стыке casting и development: мы находим сильных
+            исполнителей и одновременно проектируем продукт, в котором им есть место.
+            Не агентство «людей» и не фабрика «кода» — связка, которая держит качество
+            от брифа до запуска.
+          </p>
+        </div>
+        <figure class="section__visual">
+          <img
+            src="assets/img/craft.jpg"
+            alt="Рабочий стол студии: кастинг-сетка на планшете рядом с ноутбуком"
+            width="1152"
+            height="864"
+            loading="lazy"
+          />
+        </figure>
+      </div>
+    </section>
+
+    <section id="method" class="section section--method" data-reveal>
+      <div class="section__narrow">
+        <p class="eyebrow">Метод</p>
+        <h2>Три шага без лишнего шума</h2>
+        <ol class="method-list">
+          <li>
+            <span class="method-list__num">01</span>
+            <div>
+              <h3>Кастинг</h3>
+              <p>Формулируем роль, критерии и контекст. Подбираем людей под задачу, а не под резюме.</p>
+            </div>
+          </li>
+          <li>
+            <span class="method-list__num">02</span>
+            <div>
+              <h3>Сборка</h3>
+              <p>Проектируем архитектуру, интерфейсы и поток поставки. Быстрый прототип — затем рабочий контур.</p>
+            </div>
+          </li>
+          <li>
+            <span class="method-list__num">03</span>
+            <div>
+              <h3>Запуск</h3>
+              <p>Доводим до релиза, передаём знания команде и оставляем понятный след в документации.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="contact" class="section section--contact" data-reveal>
+      <div class="section__narrow contact">
+        <p class="eyebrow">Контакт</p>
+        <h2>Расскажите о задаче</h2>
+        <p class="contact__lead">
+          Коротко опишите продукт или casting-запрос — ответим с предложением следующего шага.
+        </p>
+        <form class="contact-form" id="contact-form" novalidate>
+          <label class="field">
+            <span>Имя</span>
+            <input type="text" name="name" autocomplete="name" required placeholder="Вячеслав" />
+          </label>
+          <label class="field">
+            <span>Email</span>
+            <input type="email" name="email" autocomplete="email" required placeholder="you@company.ru" />
+          </label>
+          <label class="field field--full">
+            <span>Задача</span>
+            <textarea name="message" rows="4" required placeholder="Нужен casting команды / запуск продукта…"></textarea>
+          </label>
+          <div class="contact-form__actions">
+            <button type="submit" class="btn btn--primary">Отправить</button>
+            <a class="btn btn--ghost" href="mailto:hello@castdev0926.labinfluences.su">Написать напрямую</a>
+          </div>
+          <p class="form-status" id="form-status" role="status" aria-live="polite" hidden></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p class="logo logo--footer">CASTDEV</p>
+      <p class="site-footer__meta">CASTDEV0926 · castdev0926.labinfluences.su</p>
+    </div>
+  </footer>
+
+  <script src="assets/js/main.js" defer></script>
+</body>
+</html>
