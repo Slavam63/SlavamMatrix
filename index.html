@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Лаборатория влияния — кастдев</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <div class="page">
+    <header class="site-header">
+      <p class="brand" id="site-brand">Лаборатория влияния</p>
+    </header>
+
+    <main id="app" class="app">
+      <!-- SCREEN 0: Intro -->
+      <section
+        id="screen-intro"
+        class="screen screen--active"
+        data-screen="intro"
+        aria-labelledby="intro-title"
+      >
+        <div class="intro">
+          <p class="brand brand--hero">Лаборатория влияния</p>
+          <h1 id="intro-title" class="intro__title">
+            Примите участие в кастдеве
+            карьерного агентства «Лаборатория влияния»!
+          </h1>
+          <p class="intro__subtitle">4 вопроса о поиске работы</p>
+          <p class="intro__text">
+            Короткий опрос для руководителей.
+            Нам важен Ваш взгляд — без правильных
+            и неправильных ответов.
+          </p>
+          <p class="intro__anon">Опрос анонимный.</p>
+          <p class="intro__note">
+            Мы не просим указывать имя, контакты или компанию.
+          </p>
+          <div class="actions">
+            <button type="button" class="btn btn--primary" id="btn-start" data-action="start">
+              Начать
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- QUESTION 1 -->
+      <section
+        id="screen-q1"
+        class="screen"
+        data-screen="q1"
+        hidden
+        aria-labelledby="q1-heading"
+      >
+        <div class="question-layout">
+          <div class="question-main">
+            <p class="progress" aria-live="polite">
+              <span class="progress__label">1 / 4</span>
+              <span class="progress__track" aria-hidden="true">
+                <span class="progress__fill" style="width: 25%"></span>
+              </span>
+            </p>
+            <h2 id="q1-heading" class="question__title">
+              1. Как Вы сейчас ищете новую работу?
+            </h2>
+            <p class="question__hint">
+              Какие каналы используете: HH, прямые обращения в компании,
+              знакомых, рекрутеров, LinkedIn или что-то ещё?
+              Что из этого считаете действительно работающим
+              для руководителя Вашего уровня?
+            </p>
+            <div class="field">
+              <label class="field__label" for="q1">Ваш ответ</label>
+              <textarea
+                id="q1"
+                name="q1"
+                class="field__input"
+                required
+                rows="6"
+                placeholder="Напишите ответ здесь. Можно коротко — главное своими словами."
+                autocomplete="off"
+              ></textarea>
+              <p class="field__error" id="q1-error" role="alert" aria-live="polite" hidden>
+                Пожалуйста, ответьте на этот вопрос.
+              </p>
+            </div>
+            <div class="actions actions--split">
+              <button type="button" class="btn btn--ghost" data-action="back" data-from="q1">
+                ← Назад
+              </button>
+              <button type="button" class="btn btn--primary" data-action="next" data-from="q1">
+                Далее →
+              </button>
+            </div>
+          </div>
+          <aside class="question-visual" aria-hidden="true">
+            <div class="visual visual--q1" data-visual="q1">
+              <!-- Reserved: assets/question-01.webp -->
+              <svg class="visual__svg" viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" role="img">
+                <title>Каналы поиска</title>
+                <rect x="24" y="40" width="72" height="48" rx="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <rect x="124" y="24" width="72" height="48" rx="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <rect x="224" y="40" width="72" height="48" rx="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="160" cy="160" r="28" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M60 88 L132 140 M160 72 L160 132 M260 88 L188 140" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.7"/>
+                <circle cx="60" cy="64" r="3" fill="currentColor"/>
+                <circle cx="160" cy="48" r="3" fill="currentColor"/>
+                <circle cx="260" cy="64" r="3" fill="currentColor"/>
+                <circle cx="160" cy="160" r="3" fill="currentColor"/>
+              </svg>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- QUESTION 2 -->
+      <section
+        id="screen-q2"
+        class="screen"
+        data-screen="q2"
+        hidden
+        aria-labelledby="q2-heading"
+      >
+        <div class="question-layout question-layout--alt">
+          <div class="question-main">
+            <p class="progress" aria-live="polite">
+              <span class="progress__label">2 / 4</span>
+              <span class="progress__track" aria-hidden="true">
+                <span class="progress__fill" style="width: 50%"></span>
+              </span>
+            </p>
+            <h2 id="q2-heading" class="question__title">
+              2. Как Вы решаете, на какие позиции и компании стоит выходить?
+            </h2>
+            <p class="question__hint">
+              Что для Вас главный ориентир: содержание роли,
+              уровень позиции, компания, доход, отрасль,
+              конкретная вакансия?
+              Есть ли уже понятный список того, что Вы ищете?
+            </p>
+            <div class="field">
+              <label class="field__label" for="q2">Ваш ответ</label>
+              <textarea
+                id="q2"
+                name="q2"
+                class="field__input"
+                required
+                rows="6"
+                placeholder="Напишите ответ здесь — как Вы обычно принимаете такое решение."
+                autocomplete="off"
+              ></textarea>
+              <p class="field__error" id="q2-error" role="alert" aria-live="polite" hidden>
+                Пожалуйста, ответьте на этот вопрос.
+              </p>
+            </div>
+            <div class="actions actions--split">
+              <button type="button" class="btn btn--ghost" data-action="back" data-from="q2">
+                ← Назад
+              </button>
+              <button type="button" class="btn btn--primary" data-action="next" data-from="q2">
+                Далее →
+              </button>
+            </div>
+          </div>
+          <aside class="question-visual" aria-hidden="true">
+            <div class="visual visual--q2" data-visual="q2">
+              <!-- Reserved: assets/question-02.webp -->
+              <svg class="visual__svg" viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" role="img">
+                <title>Выбор направления</title>
+                <circle cx="160" cy="120" r="36" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M160 120 L160 72" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M160 120 L198 148" stroke="currentColor" stroke-width="1.25" opacity="0.5" stroke-linecap="round"/>
+                <path d="M40 200 L120 140 M200 140 L280 200" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.65"/>
+                <circle cx="40" cy="200" r="4" fill="currentColor" opacity="0.5"/>
+                <circle cx="280" cy="200" r="4" fill="currentColor" opacity="0.5"/>
+                <circle cx="160" cy="120" r="4" fill="currentColor"/>
+              </svg>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- QUESTION 3 -->
+      <section
+        id="screen-q3"
+        class="screen"
+        data-screen="q3"
+        hidden
+        aria-labelledby="q3-heading"
+      >
+        <div class="question-layout">
+          <div class="question-main">
+            <p class="progress" aria-live="polite">
+              <span class="progress__label">3 / 4</span>
+              <span class="progress__track" aria-hidden="true">
+                <span class="progress__fill" style="width: 75%"></span>
+              </span>
+            </p>
+            <h2 id="q3-heading" class="question__title">
+              3. Что сейчас происходит после того,
+              как Вы находите интересную возможность?
+            </h2>
+            <p class="question__hint">
+              Где чаще возникает сложность:
+              получить первый контакт,
+              заинтересовать своим опытом,
+              пройти интервью,
+              договориться об условиях —
+              или проблема вообще в другом?
+            </p>
+            <div class="field">
+              <label class="field__label" for="q3">Ваш ответ</label>
+              <textarea
+                id="q3"
+                name="q3"
+                class="field__input"
+                required
+                rows="6"
+                placeholder="Напишите ответ здесь — можно привести конкретный пример."
+                autocomplete="off"
+              ></textarea>
+              <p class="field__error" id="q3-error" role="alert" aria-live="polite" hidden>
+                Пожалуйста, ответьте на этот вопрос.
+              </p>
+            </div>
+            <div class="actions actions--split">
+              <button type="button" class="btn btn--ghost" data-action="back" data-from="q3">
+                ← Назад
+              </button>
+              <button type="button" class="btn btn--primary" data-action="next" data-from="q3">
+                Далее →
+              </button>
+            </div>
+          </div>
+          <aside class="question-visual" aria-hidden="true">
+            <div class="visual visual--q3" data-visual="q3">
+              <!-- Reserved: assets/question-03.webp -->
+              <svg class="visual__svg" viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" role="img">
+                <title>Путь от возможности к условиям</title>
+                <circle cx="48" cy="120" r="18" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="122" cy="120" r="18" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="196" cy="120" r="18" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="270" cy="120" r="18" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M66 120 H104 M140 120 H178 M214 120 H252" stroke="currentColor" stroke-width="1.25" opacity="0.7"/>
+                <text x="48" y="124" text-anchor="middle" font-size="11" fill="currentColor" opacity="0.7">1</text>
+                <text x="122" y="124" text-anchor="middle" font-size="11" fill="currentColor" opacity="0.7">2</text>
+                <text x="196" y="124" text-anchor="middle" font-size="11" fill="currentColor" opacity="0.7">3</text>
+                <text x="270" y="124" text-anchor="middle" font-size="11" fill="currentColor" opacity="0.7">4</text>
+              </svg>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- QUESTION 4 -->
+      <section
+        id="screen-q4"
+        class="screen"
+        data-screen="q4"
+        hidden
+        aria-labelledby="q4-heading"
+      >
+        <div class="question-layout question-layout--alt">
+          <div class="question-main">
+            <p class="progress" aria-live="polite">
+              <span class="progress__label">4 / 4</span>
+              <span class="progress__track" aria-hidden="true">
+                <span class="progress__fill" style="width: 100%"></span>
+              </span>
+            </p>
+            <h2 id="q4-heading" class="question__title">
+              4. Если бы Вы сейчас решили что-то изменить
+              в своём поиске, что бы Вы меняли в первую очередь?
+            </h2>
+            <p class="question__hint">
+              А что, наоборот, считаете правильным
+              и точно менять не стали бы?
+            </p>
+            <div class="field">
+              <label class="field__label" for="q4">Ваш ответ</label>
+              <textarea
+                id="q4"
+                name="q4"
+                class="field__input"
+                required
+                rows="6"
+                placeholder="Напишите ответ здесь — что изменить, а что точно сохранить."
+                autocomplete="off"
+              ></textarea>
+              <p class="field__error" id="q4-error" role="alert" aria-live="polite" hidden>
+                Пожалуйста, ответьте на этот вопрос.
+              </p>
+            </div>
+            <p class="submit-status" id="submit-status" role="status" aria-live="polite" hidden></p>
+            <div class="actions actions--split">
+              <button type="button" class="btn btn--ghost" data-action="back" data-from="q4">
+                ← Назад
+              </button>
+              <button type="button" class="btn btn--primary" id="btn-submit" data-action="submit">
+                Отправить ответы
+              </button>
+            </div>
+          </div>
+          <aside class="question-visual" aria-hidden="true">
+            <div class="visual visual--q4" data-visual="q4">
+              <!-- Reserved: assets/question-04.webp -->
+              <svg class="visual__svg" viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" role="img">
+                <title>Изменить и сохранить</title>
+                <path d="M60 160 C100 80, 140 80, 160 120 C180 160, 220 160, 260 80" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M60 160 C100 200, 200 200, 260 80" fill="none" stroke="currentColor" stroke-width="1.25" stroke-dasharray="4 4" opacity="0.55"/>
+                <circle cx="60" cy="160" r="5" fill="currentColor"/>
+                <circle cx="260" cy="80" r="5" fill="currentColor"/>
+              </svg>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- SUCCESS (hidden until future backend confirms) -->
+      <section
+        id="screen-success"
+        class="screen screen--success"
+        data-screen="success"
+        hidden
+        aria-labelledby="success-title"
+      >
+        <div class="final-panel">
+          <h2 id="success-title" class="final-panel__title">Спасибо за участие!</h2>
+          <p class="final-panel__lead">Ваши ответы отправлены.</p>
+          <p class="final-panel__text">
+            Спасибо, что поделились своим опытом.
+            Он поможет нам лучше понять,
+            как сегодня руководители ищут работу.
+          </p>
+          <p class="final-panel__sign">
+            Татьяна Воробьёва<br>
+            «Лаборатория влияния»
+          </p>
+          <p class="final-panel__note">
+            Через несколько секунд Вы вернётесь
+            на сайт «Лаборатории влияния».
+          </p>
+          <div class="actions">
+            <a class="btn btn--primary" id="btn-go-site" href="https://labinfluences.ru/">
+              Перейти на сайт сейчас
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ERROR (hidden until future submit failure) -->
+      <section
+        id="screen-error"
+        class="screen screen--error"
+        data-screen="error"
+        hidden
+        aria-labelledby="error-title"
+      >
+        <div class="final-panel">
+          <h2 id="error-title" class="final-panel__title">Не удалось отправить ответы.</h2>
+          <p class="final-panel__text" id="error-message">
+            Ваш текст сохранён на странице.
+            Пожалуйста, попробуйте ещё раз.
+          </p>
+          <div class="actions">
+            <button type="button" class="btn btn--primary" id="btn-retry" data-action="retry">
+              Попробовать снова
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>© Лаборатория влияния</p>
+      <p><a class="footer-link" href="https://labinfluences.ru/">labinfluences.ru</a></p>
+    </footer>
+  </div>
+
+  <script src="assets/app.js" defer></script>
+</body>
+</html>
