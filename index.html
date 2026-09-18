@@ -11,6 +11,15 @@
   <div class="page">
     <header class="site-header">
       <p class="brand" id="site-brand">Лаборатория влияния</p>
+      <a class="site-logo" href="https://labinfluences.ru/" aria-label="Лаборатория влияния">
+        <img
+          class="site-logo__img"
+          src="assets/logo_labinfluences_horizontal.png"
+          alt="Лаборатория влияния"
+          width="200"
+          height="118"
+        >
+      </a>
     </header>
 
     <main id="app" class="app">
@@ -21,31 +30,45 @@
         data-screen="intro"
         aria-labelledby="intro-title"
       >
-        <div class="intro">
-          <p class="brand brand--hero">Лаборатория влияния</p>
-          <h1 id="intro-title" class="intro__title">
-            Примите участие в кастдеве
-            карьерного агентства «Лаборатория влияния»!
-          </h1>
-          <p class="intro__subtitle">4 вопроса о поиске работы</p>
-          <p class="intro__text">
-            Короткий опрос для руководителей.
-            Нам важен Ваш взгляд — без правильных
-            и неправильных ответов.
-          </p>
-          <p class="intro__anon">Опрос анонимный.</p>
-          <p class="intro__note">
-            Мы не просим указывать имя, контакты или компанию.
-          </p>
-          <div class="actions actions--intro">
-            <button type="button" class="btn btn--primary" id="btn-start" data-action="start">
-              Начать
-            </button>
-            <button type="button" class="btn btn--secondary" id="btn-share" data-action="share">
-              Поделиться ссылкой
-            </button>
+        <div class="intro-layout">
+          <div class="intro">
+            <p class="brand brand--hero">Лаборатория влияния</p>
+            <h1 id="intro-title" class="intro__title">
+              Примите участие в кастдеве
+              карьерного агентства «Лаборатория влияния»!
+            </h1>
+            <p class="intro__subtitle">4 вопроса о поиске работы</p>
+            <p class="intro__text">
+              Короткий опрос для руководителей.
+              Нам важен Ваш взгляд — без правильных
+              и неправильных ответов.
+            </p>
+            <p class="intro__anon">Опрос анонимный.</p>
+            <p class="intro__note">
+              Мы не просим указывать имя, контакты или компанию.
+            </p>
+            <div class="actions actions--intro">
+              <button type="button" class="btn btn--primary" id="btn-start" data-action="start">
+                Начать
+              </button>
+              <button type="button" class="btn btn--secondary" id="btn-share" data-action="share">
+                Поделиться ссылкой
+              </button>
+            </div>
+            <p class="share-status" id="share-status" role="status" aria-live="polite" hidden></p>
           </div>
-          <p class="share-status" id="share-status" role="status" aria-live="polite" hidden></p>
+          <aside class="intro-visual" aria-hidden="true">
+            <figure class="media media--hero">
+              <img
+                class="media__img"
+                src="assets/images/start-hero.png"
+                alt=""
+                width="1600"
+                height="900"
+                decoding="async"
+              >
+            </figure>
+          </aside>
         </div>
       </section>
 
@@ -99,21 +122,17 @@
             </div>
           </div>
           <aside class="question-visual" aria-hidden="true">
-            <div class="visual visual--q1" data-visual="q1">
-              <!-- Reserved: assets/question-01.webp -->
-              <svg class="visual__svg" viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" role="img">
-                <title>Каналы поиска</title>
-                <rect x="24" y="40" width="72" height="48" rx="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
-                <rect x="124" y="24" width="72" height="48" rx="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
-                <rect x="224" y="40" width="72" height="48" rx="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
-                <circle cx="160" cy="160" r="28" fill="none" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M60 88 L132 140 M160 72 L160 132 M260 88 L188 140" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.7"/>
-                <circle cx="60" cy="64" r="3" fill="currentColor"/>
-                <circle cx="160" cy="48" r="3" fill="currentColor"/>
-                <circle cx="260" cy="64" r="3" fill="currentColor"/>
-                <circle cx="160" cy="160" r="3" fill="currentColor"/>
-              </svg>
-            </div>
+            <figure class="media media--question visual visual--q1" data-visual="q1">
+              <img
+                class="media__img"
+                src="assets/images/question-01.png"
+                alt=""
+                width="1600"
+                height="900"
+                loading="lazy"
+                decoding="async"
+              >
+            </figure>
           </aside>
         </div>
       </section>
@@ -168,19 +187,17 @@
             </div>
           </div>
           <aside class="question-visual" aria-hidden="true">
-            <div class="visual visual--q2" data-visual="q2">
-              <!-- Reserved: assets/question-02.webp -->
-              <svg class="visual__svg" viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" role="img">
-                <title>Выбор направления</title>
-                <circle cx="160" cy="120" r="36" fill="none" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M160 120 L160 72" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <path d="M160 120 L198 148" stroke="currentColor" stroke-width="1.25" opacity="0.5" stroke-linecap="round"/>
-                <path d="M40 200 L120 140 M200 140 L280 200" fill="none" stroke="currentColor" stroke-width="1.25" opacity="0.65"/>
-                <circle cx="40" cy="200" r="4" fill="currentColor" opacity="0.5"/>
-                <circle cx="280" cy="200" r="4" fill="currentColor" opacity="0.5"/>
-                <circle cx="160" cy="120" r="4" fill="currentColor"/>
-              </svg>
-            </div>
+            <figure class="media media--question visual visual--q2" data-visual="q2">
+              <img
+                class="media__img"
+                src="assets/images/question-02.png"
+                alt=""
+                width="1600"
+                height="900"
+                loading="lazy"
+                decoding="async"
+              >
+            </figure>
           </aside>
         </div>
       </section>
@@ -238,21 +255,17 @@
             </div>
           </div>
           <aside class="question-visual" aria-hidden="true">
-            <div class="visual visual--q3" data-visual="q3">
-              <!-- Reserved: assets/question-03.webp -->
-              <svg class="visual__svg" viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" role="img">
-                <title>Путь от возможности к условиям</title>
-                <circle cx="48" cy="120" r="18" fill="none" stroke="currentColor" stroke-width="1.5"/>
-                <circle cx="122" cy="120" r="18" fill="none" stroke="currentColor" stroke-width="1.5"/>
-                <circle cx="196" cy="120" r="18" fill="none" stroke="currentColor" stroke-width="1.5"/>
-                <circle cx="270" cy="120" r="18" fill="none" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M66 120 H104 M140 120 H178 M214 120 H252" stroke="currentColor" stroke-width="1.25" opacity="0.7"/>
-                <text x="48" y="124" text-anchor="middle" font-size="11" fill="currentColor" opacity="0.7">1</text>
-                <text x="122" y="124" text-anchor="middle" font-size="11" fill="currentColor" opacity="0.7">2</text>
-                <text x="196" y="124" text-anchor="middle" font-size="11" fill="currentColor" opacity="0.7">3</text>
-                <text x="270" y="124" text-anchor="middle" font-size="11" fill="currentColor" opacity="0.7">4</text>
-              </svg>
-            </div>
+            <figure class="media media--question visual visual--q3" data-visual="q3">
+              <img
+                class="media__img"
+                src="assets/images/question-03.png"
+                alt=""
+                width="1600"
+                height="900"
+                loading="lazy"
+                decoding="async"
+              >
+            </figure>
           </aside>
         </div>
       </section>
@@ -307,16 +320,17 @@
             </div>
           </div>
           <aside class="question-visual" aria-hidden="true">
-            <div class="visual visual--q4" data-visual="q4">
-              <!-- Reserved: assets/question-04.webp -->
-              <svg class="visual__svg" viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" role="img">
-                <title>Изменить и сохранить</title>
-                <path d="M60 160 C100 80, 140 80, 160 120 C180 160, 220 160, 260 80" fill="none" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M60 160 C100 200, 200 200, 260 80" fill="none" stroke="currentColor" stroke-width="1.25" stroke-dasharray="4 4" opacity="0.55"/>
-                <circle cx="60" cy="160" r="5" fill="currentColor"/>
-                <circle cx="260" cy="80" r="5" fill="currentColor"/>
-              </svg>
-            </div>
+            <figure class="media media--question visual visual--q4" data-visual="q4">
+              <img
+                class="media__img"
+                src="assets/images/question-04.png"
+                alt=""
+                width="1600"
+                height="900"
+                loading="lazy"
+                decoding="async"
+              >
+            </figure>
           </aside>
         </div>
       </section>

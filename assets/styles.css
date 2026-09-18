@@ -1,27 +1,30 @@
-/* Лаборатория влияния — anonymous castdev survey
-   Palette: navy / off-white / muted gold
+/* Лаборатория влияния — CASTDEV0926 visual Op8
+   Palette: deep brown / pale cream / forest green
    No CDN, no Google Fonts */
 
 :root {
-  --navy: #0f2744;
-  --navy-deep: #0a1c32;
-  --navy-soft: #1a3a5c;
-  --off-white: #f6f4ef;
-  --white: #ffffff;
-  --gold: #a68b4b;
-  --gold-muted: #8f7640;
-  --gold-soft: #c4b48a;
-  --text: #1a2433;
-  --text-muted: #5a6575;
-  --border: #d9d4c8;
-  --error: #8b3a3a;
-  --focus: #a68b4b;
-  --radius: 6px;
-  --shadow: 0 8px 28px rgba(15, 39, 68, 0.08);
+  --bg: #221302;
+  --bg-elevated: rgba(249, 252, 186, 0.06);
+  --bg-field: rgba(249, 252, 186, 0.08);
+  --ink: #f9fcba;
+  --ink-muted: #d6d99a;
+  --ink-soft: #b8bb7e;
+  --progress: #145229;
+  --progress-track: rgba(249, 252, 186, 0.18);
+  --hover-bg: #2ecc71;
+  --hover-accent: #ff5f5f;
+  --error: #ff8a7a;
+  --focus: #f9fcba;
+  --border: rgba(249, 252, 186, 0.55);
+  --border-soft: rgba(249, 252, 186, 0.28);
+  --radius: 2px;
+  --shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+  --font-display: "Palatino Linotype", Palatino, "Book Antiqua", "Iowan Old Style",
+    "Times New Roman", serif;
   --font: "Segoe UI", "Helvetica Neue", Arial, "Noto Sans", sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji";
   --motion: 280ms;
-  --max: 1080px;
+  --max: 1180px;
 }
 
 *,
@@ -40,15 +43,16 @@ body {
   font-family: var(--font);
   font-size: 1.05rem;
   line-height: 1.55;
-  color: var(--text);
+  color: var(--ink);
   background:
-    radial-gradient(ellipse 90% 55% at 10% -10%, rgba(166, 139, 75, 0.12), transparent 55%),
-    radial-gradient(ellipse 70% 50% at 100% 0%, rgba(15, 39, 68, 0.08), transparent 50%),
-    linear-gradient(180deg, var(--off-white) 0%, #efece4 100%);
+    radial-gradient(ellipse 80% 50% at 85% 8%, rgba(20, 82, 41, 0.22), transparent 55%),
+    radial-gradient(ellipse 70% 45% at 8% 20%, rgba(249, 252, 186, 0.06), transparent 50%),
+    linear-gradient(165deg, #2a1a08 0%, var(--bg) 42%, #1a0f02 100%);
+  background-attachment: fixed;
 }
 
 a {
-  color: var(--navy-soft);
+  color: var(--ink);
 }
 
 .page {
@@ -57,26 +61,45 @@ a {
   flex-direction: column;
   max-width: var(--max);
   margin: 0 auto;
-  padding: 1.25rem 1.25rem 2rem;
+  padding: 1.1rem 1.35rem 2rem;
 }
 
 .site-header {
-  padding: 0.25rem 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.15rem 0 1.1rem;
 }
 
 .brand {
   margin: 0;
-  font-size: 0.8rem;
-  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--navy);
+  color: var(--ink-muted);
   font-weight: 600;
 }
 
 .brand--hero {
-  font-size: 0.85rem;
-  margin-bottom: 1.5rem;
-  color: var(--gold-muted);
+  font-size: 0.78rem;
+  margin-bottom: 1.15rem;
+  color: var(--ink-soft);
+}
+
+.site-logo {
+  display: block;
+  flex: 0 0 auto;
+  line-height: 0;
+}
+
+.site-logo__img {
+  display: block;
+  width: clamp(7.5rem, 16vw, 10.5rem);
+  height: auto;
+  /* Source asset is white/gray; tint toward brand cream #F9FCBA */
+  filter: brightness(0) saturate(100%) invert(97%) sepia(18%) saturate(620%)
+    hue-rotate(8deg) brightness(104%) contrast(96%);
 }
 
 .app {
@@ -88,16 +111,13 @@ a {
   display: none;
 }
 
-/* Base visibility so an invalid/missing animation cannot leave content at opacity:0 */
 .screen--active {
   display: block;
   opacity: 1;
   transform: none;
-  /* --motion is duration only; do not put easing in the variable */
   animation: screen-in var(--motion) ease both;
 }
 
-/* UA [hidden] is display:none !important; keep that explicit for screen sections */
 .screen[hidden] {
   display: none !important;
   animation: none;
@@ -141,46 +161,63 @@ a {
     opacity: 1;
     transform: none;
   }
+
+  .btn,
+  .media__img {
+    transition: none !important;
+  }
 }
 
-/* Intro */
+/* Intro — two columns, hero right */
+.intro-layout {
+  display: grid;
+  gap: 1.75rem;
+  align-items: center;
+  padding: 0.35rem 0 1rem;
+}
+
 .intro {
   max-width: 36rem;
-  padding: 2rem 0 1rem;
+  padding: 0.5rem 0 0.25rem;
 }
 
 .intro__title {
   margin: 0 0 1rem;
-  font-size: clamp(1.55rem, 3.4vw, 2.15rem);
-  line-height: 1.25;
+  font-family: var(--font-display);
+  font-size: clamp(1.55rem, 3.2vw, 2.2rem);
+  line-height: 1.22;
   font-weight: 650;
-  color: var(--navy);
+  color: var(--ink);
   letter-spacing: -0.01em;
 }
 
 .intro__subtitle {
-  margin: 0 0 1.25rem;
-  font-size: 1.15rem;
-  color: var(--gold-muted);
+  margin: 0 0 1.15rem;
+  font-size: 1.12rem;
+  color: var(--ink-muted);
   font-weight: 500;
 }
 
 .intro__text {
-  margin: 0 0 1.25rem;
-  color: var(--text);
+  margin: 0 0 1.15rem;
+  color: var(--ink);
   max-width: 32rem;
 }
 
 .intro__anon {
   margin: 0 0 0.35rem;
   font-weight: 600;
-  color: var(--navy);
+  color: var(--ink);
 }
 
 .intro__note {
-  margin: 0 0 2rem;
-  color: var(--text-muted);
+  margin: 0 0 1.75rem;
+  color: var(--ink-soft);
   font-size: 0.98rem;
+}
+
+.intro-visual {
+  min-width: 0;
 }
 
 .actions--intro {
@@ -191,7 +228,7 @@ a {
 
 .share-status {
   margin: 0.85rem 0 0;
-  color: var(--text-muted);
+  color: var(--ink-muted);
   font-size: 0.95rem;
 }
 
@@ -210,34 +247,50 @@ a {
   padding: 0.45rem 0.65rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--white);
-  color: var(--text);
+  background: var(--bg-field);
+  color: var(--ink);
   font: inherit;
   font-size: 0.9rem;
 }
 
-/* Question layout */
-.question-layout {
-  display: grid;
-  gap: 1.75rem;
-  align-items: start;
-  padding: 0.5rem 0 1rem;
+/* Media frames */
+.media {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
 }
 
-@media (min-width: 900px) {
-  .question-layout {
-    grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.85fr);
-    gap: 2.5rem;
-    min-height: 28rem;
-  }
+.media--hero {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+}
 
-  .question-layout--alt .question-main {
-    order: 2;
-  }
+.media--question {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+}
 
-  .question-layout--alt .question-visual {
-    order: 1;
-  }
+.media__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transition: transform 700ms ease;
+}
+
+.media:hover .media__img {
+  transform: scale(1.02);
+}
+
+/* Question layout — ~65% form / ~35% visual desktop */
+.question-layout {
+  display: grid;
+  gap: 1.5rem;
+  align-items: start;
+  padding: 0.35rem 0 1rem;
 }
 
 .question-main {
@@ -245,22 +298,22 @@ a {
 }
 
 .progress {
-  margin: 0 0 1.25rem;
+  margin: 0 0 1.2rem;
 }
 
 .progress__label {
   display: block;
   font-size: 0.85rem;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--ink-muted);
   margin-bottom: 0.5rem;
   font-variant-numeric: tabular-nums;
 }
 
 .progress__track {
   display: block;
-  height: 2px;
-  background: var(--border);
+  height: 3px;
+  background: var(--progress-track);
   border-radius: 1px;
   overflow: hidden;
 }
@@ -268,22 +321,24 @@ a {
 .progress__fill {
   display: block;
   height: 100%;
-  background: var(--gold);
+  background: var(--progress);
+  box-shadow: 0 0 0 1px rgba(20, 82, 41, 0.35);
 }
 
 .question__title {
   margin: 0 0 0.85rem;
-  font-size: clamp(1.25rem, 2.5vw, 1.65rem);
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 2.4vw, 1.7rem);
   line-height: 1.3;
-  color: var(--navy);
+  color: var(--ink);
   font-weight: 650;
 }
 
 .question__hint {
   margin: 0 0 1.35rem;
-  color: var(--text-muted);
+  color: var(--ink-muted);
   font-size: 1rem;
-  max-width: 38rem;
+  max-width: 40rem;
 }
 
 .field {
@@ -310,31 +365,34 @@ a {
   padding: 0.95rem 1rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--white);
-  color: var(--text);
+  background: var(--bg-field);
+  color: var(--ink);
   font: inherit;
   line-height: 1.5;
   resize: vertical;
-  box-shadow: var(--shadow);
-  transition: border-color 180ms ease, box-shadow 180ms ease;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
 }
 
 .field__input::placeholder {
-  color: #8a93a0;
+  color: var(--ink-soft);
+  opacity: 0.85;
 }
 
 .field__input:hover {
-  border-color: #c5beae;
+  border-color: var(--ink);
+  background: rgba(249, 252, 186, 0.1);
 }
 
 .field__input:focus {
   outline: none;
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px rgba(166, 139, 75, 0.22), var(--shadow);
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px rgba(249, 252, 186, 0.2);
+  background: rgba(249, 252, 186, 0.11);
 }
 
 .field__input.is-invalid {
   border-color: var(--error);
+  box-shadow: 0 0 0 2px rgba(255, 138, 122, 0.25);
 }
 
 .field__error {
@@ -346,47 +404,19 @@ a {
 .submit-status {
   margin: 0 0 1rem;
   padding: 0.85rem 1rem;
-  background: rgba(166, 139, 75, 0.12);
-  border: 1px solid rgba(166, 139, 75, 0.35);
+  background: rgba(20, 82, 41, 0.28);
+  border: 1px solid rgba(46, 204, 113, 0.45);
   border-radius: var(--radius);
-  color: var(--navy);
+  color: var(--ink);
   font-size: 0.98rem;
 }
 
-/* Visual zone — CSS/SVG placeholders; paths reserved for webp later */
 .question-visual {
-  display: none;
-}
-
-@media (min-width: 900px) {
-  .question-visual {
-    display: block;
-    padding-top: 2.5rem;
-  }
+  min-width: 0;
 }
 
 .visual {
-  aspect-ratio: 4 / 3;
-  border-radius: var(--radius);
-  background:
-    linear-gradient(145deg, rgba(15, 39, 68, 0.04), rgba(166, 139, 75, 0.08)),
-    var(--white);
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--navy-soft);
-  /* Drop-in replacement later:
-     background-image: url("question-0N.webp");
-     background-size: cover;
-  */
-}
-
-.visual__svg {
-  width: 78%;
-  max-width: 280px;
-  height: auto;
-  opacity: 0.85;
+  color: var(--ink);
 }
 
 /* Actions / buttons */
@@ -415,7 +445,8 @@ a {
   font-weight: 560;
   cursor: pointer;
   text-decoration: none;
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease,
+    transform 160ms ease;
 }
 
 .btn:focus-visible {
@@ -424,19 +455,20 @@ a {
 }
 
 .btn--primary {
-  background: var(--navy);
-  color: var(--white);
-  border-color: var(--navy);
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
 }
 
 .btn--primary:hover {
-  background: var(--navy-soft);
-  border-color: var(--navy-soft);
+  background: var(--hover-bg);
+  border-color: var(--hover-accent);
+  color: var(--hover-accent);
 }
 
 .btn--secondary {
   background: transparent;
-  color: var(--navy-soft);
+  color: var(--ink);
   border-color: var(--border);
   font-weight: 500;
   min-height: 2.55rem;
@@ -445,21 +477,21 @@ a {
 }
 
 .btn--secondary:hover {
-  border-color: var(--gold-soft);
-  color: var(--navy);
-  background: rgba(255, 255, 255, 0.55);
+  border-color: var(--hover-accent);
+  color: var(--hover-accent);
+  background: rgba(46, 204, 113, 0.12);
 }
 
 .btn--ghost {
   background: transparent;
-  color: var(--navy-soft);
+  color: var(--ink-muted);
   border-color: transparent;
   padding-left: 0.5rem;
   padding-right: 0.5rem;
 }
 
 .btn--ghost:hover {
-  color: var(--navy);
+  color: var(--ink);
 }
 
 /* Success / error panels (prepared, not shown now) */
@@ -470,42 +502,43 @@ a {
 
 .final-panel__title {
   margin: 0 0 0.85rem;
-  color: var(--navy);
+  font-family: var(--font-display);
+  color: var(--ink);
   font-size: clamp(1.4rem, 3vw, 1.9rem);
 }
 
 .final-panel__lead {
   margin: 0 0 1rem;
   font-weight: 600;
-  color: var(--navy);
+  color: var(--ink);
 }
 
 .final-panel__text {
   margin: 0 0 1.25rem;
-  color: var(--text);
+  color: var(--ink-muted);
 }
 
 .final-panel__sign {
   margin: 0 0 1.5rem;
-  color: var(--text-muted);
+  color: var(--ink-soft);
   line-height: 1.45;
 }
 
 .final-panel__note {
   margin: 0 0 1.75rem;
-  color: var(--text-muted);
+  color: var(--ink-soft);
   font-size: 0.98rem;
 }
 
 .site-footer {
-  margin-top: 2.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--border);
+  margin-top: 2.25rem;
+  padding-top: 1.15rem;
+  border-top: 1px solid var(--border-soft);
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1.5rem;
   justify-content: space-between;
-  color: var(--text-muted);
+  color: var(--ink-soft);
   font-size: 0.88rem;
 }
 
@@ -514,18 +547,111 @@ a {
 }
 
 .footer-link {
-  color: var(--text-muted);
+  color: var(--ink-muted);
   text-decoration: none;
 }
 
 .footer-link:hover {
-  color: var(--navy);
+  color: var(--ink);
   text-decoration: underline;
+}
+
+/* Desktop compositions */
+@media (min-width: 900px) {
+  .intro-layout {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    gap: 2.75rem;
+    min-height: 28rem;
+  }
+
+  .question-layout {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+    gap: 2.35rem;
+    min-height: 28rem;
+  }
+
+  .question-layout--alt .question-main {
+    order: 2;
+  }
+
+  .question-layout--alt .question-visual {
+    order: 1;
+  }
+
+  .question-visual {
+    padding-top: 2.35rem;
+  }
+}
+
+/* Mobile: rethink stacking, not just shrink */
+@media (max-width: 899px) {
+  .site-header {
+    align-items: flex-start;
+  }
+
+  .intro-layout {
+    gap: 1.35rem;
+  }
+
+  /* Atmosphere first, then copy + CTA */
+  .intro-visual {
+    order: -1;
+  }
+
+  .media--hero {
+    max-height: 42vw;
+    min-height: 9.5rem;
+  }
+
+  /* Question: progress → title → visual strip → form */
+  .question-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .question-visual {
+    order: 0;
+    margin: -0.15rem 0 0.15rem;
+  }
+
+  .question-main {
+    display: contents;
+  }
+
+  .question-main > .progress {
+    order: -2;
+  }
+
+  .question-main > .question__title {
+    order: -1;
+  }
+
+  .question-visual {
+    order: 0;
+  }
+
+  .question-main > .question__hint,
+  .question-main > .field,
+  .question-main > .submit-status,
+  .question-main > .actions {
+    order: 1;
+  }
+
+  .media--question {
+    max-height: 9.5rem;
+  }
+
+  .actions--intro {
+    width: 100%;
+  }
+
+  .actions--intro .btn {
+    width: 100%;
+  }
 }
 
 @media (max-width: 374px) {
   .page {
-    padding: 1rem;
+    padding: 0.9rem 0.9rem 1.5rem;
   }
 
   .field__input {
@@ -539,5 +665,9 @@ a {
 
   .btn--ghost {
     justify-content: flex-start;
+  }
+
+  .media--question {
+    max-height: 8rem;
   }
 }
