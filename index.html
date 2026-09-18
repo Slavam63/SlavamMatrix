@@ -37,11 +37,15 @@
           <p class="intro__note">
             Мы не просим указывать имя, контакты или компанию.
           </p>
-          <div class="actions">
+          <div class="actions actions--intro">
             <button type="button" class="btn btn--primary" id="btn-start" data-action="start">
               Начать
             </button>
+            <button type="button" class="btn btn--secondary" id="btn-share" data-action="share">
+              Поделиться ссылкой
+            </button>
           </div>
+          <p class="share-status" id="share-status" role="status" aria-live="polite" hidden></p>
         </div>
       </section>
 
@@ -317,7 +321,7 @@
         </div>
       </section>
 
-      <!-- SUCCESS (hidden until future backend confirms) -->
+      <!-- SUCCESS (not shown in current build) -->
       <section
         id="screen-success"
         class="screen screen--success"
@@ -349,7 +353,7 @@
         </div>
       </section>
 
-      <!-- ERROR (hidden until future submit failure) -->
+      <!-- ERROR (not shown in current build) -->
       <section
         id="screen-error"
         class="screen screen--error"

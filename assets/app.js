@@ -2,12 +2,6 @@
  * Лаборатория влияния — anonymous castdev survey
  * Step flow: Intro → Q1 → Q2 → Q3 → Q4 → (submit stub)
  * No mailto, no fetch, no storage, no trackers.
- *
- * Future (not wired in this build):
- *   POST /api/castdev  with JSON { q1, q2, q3, q4 }
- *   On confirmed success → show #screen-success, then redirect
- *     to https://labinfluences.ru/ after 5 seconds
- *   On error → show #screen-error, keep answers, no redirect
  */
 
 (function () {
@@ -15,6 +9,7 @@
 
   var REDIRECT_URL = "https://labinfluences.ru/";
   var REDIRECT_DELAY_MS = 5000;
+  var SHARE_TITLE = "Лаборатория влияния — кастдев";
 
   var SCREENS = ["intro", "q1", "q2", "q3", "q4", "success", "error"];
   var QUESTION_ORDER = ["q1", "q2", "q3", "q4"];
@@ -22,6 +17,7 @@
   var current = "intro";
   var transitioning = false;
   var redirectTimer = null;
+  var shareStatusTimer = null;
 
   var app = document.getElementById("app");
   if (!app) return;
@@ -73,6 +69,132 @@
     status.hidden = false;
     status.textContent =
       "Форма готова. Отправка ответов будет подключена перед запуском опроса.";
+  }
+
+  function clearShareStatus() {
+    var status = $("share-status");
+    if (!status) return;
+    status.hidden = true;
+    status.textContent = "";
+    status.classList.remove("share-status--url");
+  }
+
+  function showShareCopiedMessage() {
+    var status = $("share-status");
+    if (!status) return;
+    if (shareStatusTimer) {
+      window.clearTimeout(shareStatusTimer);
+      shareStatusTimer = null;
+    }
+    status.classList.remove("share-status--url");
+    status.hidden = false;
+    status.textContent = "Ссылка скопирована.";
+    shareStatusTimer = window.setTimeout(function () {
+      clearShareStatus();
+      shareStatusTimer = null;
+    }, 4000);
+  }
+
+  function showShareUrlForManualCopy(url) {
+    var status = $("share-status");
+    if (!status) return;
+    if (shareStatusTimer) {
+      window.clearTimeout(shareStatusTimer);
+      shareStatusTimer = null;
+    }
+    status.classList.add("share-status--url");
+    status.hidden = false;
+    status.textContent = "";
+    var label = document.createElement("span");
+    label.textContent = "Скопируйте ссылку: ";
+    var link = document.createElement("input");
+    link.type = "text";
+    link.readOnly = true;
+    link.className = "share-status__url";
+    link.value = url;
+    link.setAttribute("aria-label", "Ссылка на страницу");
+    status.appendChild(label);
+    status.appendChild(link);
+    window.setTimeout(function () {
+      link.focus();
+      link.select();
+    }, 0);
+  }
+
+  function copyWithExecCommand(url) {
+    var ta = document.createElement("textarea");
+    ta.value = url;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "0";
+    ta.style.left = "0";
+    ta.style.width = "1px";
+    ta.style.height = "1px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    var ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch (e) {
+      ok = false;
+    }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  function copyPageUrl(url) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      return navigator.clipboard.writeText(url).then(
+        function () {
+          showShareCopiedMessage();
+        },
+        function () {
+          if (copyWithExecCommand(url)) {
+            showShareCopiedMessage();
+          } else {
+            showShareUrlForManualCopy(url);
+          }
+        }
+      );
+    }
+    if (copyWithExecCommand(url)) {
+      showShareCopiedMessage();
+      return Promise.resolve();
+    }
+    showShareUrlForManualCopy(url);
+    return Promise.resolve();
+  }
+
+  function handleShare() {
+    var url = window.location.href;
+
+    if (typeof navigator.share === "function") {
+      try {
+        var sharePromise = navigator.share({
+          title: SHARE_TITLE,
+          url: url
+        });
+        if (sharePromise && typeof sharePromise.then === "function") {
+          sharePromise.then(
+            function () {},
+            function (err) {
+              if (err && err.name === "AbortError") return;
+              copyPageUrl(url);
+            }
+          );
+          return;
+        }
+        return;
+      } catch (err) {
+        if (err && err.name === "AbortError") return;
+        copyPageUrl(url);
+        return;
+      }
+    }
+
+    copyPageUrl(url);
   }
 
   function validateCurrentQuestion(qid) {
@@ -145,6 +267,7 @@
   function goNext(from) {
     if (from === "intro") {
       clearSubmitStatus();
+      clearShareStatus();
       setScreen("q1");
       return;
     }
@@ -188,10 +311,6 @@
     showSubmitStubMessage();
   }
 
-  /**
-   * Prepared for future confirmed-success path only.
-   * Must NOT be called until backend returns success.
-   */
   function showSuccessAndScheduleRedirect() {
     setScreen("success", { force: true });
     if (redirectTimer) {
@@ -202,9 +321,6 @@
     }, REDIRECT_DELAY_MS);
   }
 
-  /**
-   * Prepared for future submit failure. Keeps q1–q4. No redirect.
-   */
   function showErrorScreen() {
     if (redirectTimer) {
       window.clearTimeout(redirectTimer);
@@ -238,6 +354,10 @@
       goNext("intro");
       return;
     }
+    if (action === "share") {
+      handleShare();
+      return;
+    }
     if (action === "next" && from) {
       goNext(from);
       return;
@@ -255,7 +375,6 @@
     }
   });
 
-  /* Helpers reserved for a later backend wiring pass — not used by current UI */
   window.CastdevSurvey = {
     showSuccessAndScheduleRedirect: showSuccessAndScheduleRedirect,
     showErrorScreen: showErrorScreen,
