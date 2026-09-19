@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Активация браузера — CASTDEV09.26</title>
+  <link rel="stylesheet" href="/admin/static/admin.css">
+</head>
+<body>
+  <div class="wrap narrow">
+    <p class="eyebrow">CASTDEV09.26</p>
+    <h1>Активация браузера Татьяны</h1>
+    <p class="lead">
+      Однократная безопасная активация. После успеха этот браузер увидит кнопку
+      доступа к аналитике. Другие браузеры — нет. Не используем IP и fingerprint
+      как доказательство личности.
+    </p>
+    <form id="activate-form" action="#" method="post">
+      <label for="token">Код активации</label>
+      <input id="token" name="token" type="password" autocomplete="off" required>
+      <button type="button" class="btn primary" id="btn-activate">Активировать</button>
+    </form>
+    <p id="status" role="status" aria-live="polite"></p>
+    <p><a href="/admin">К аналитике</a> · <a href="/">К анкете</a></p>
+  </div>
+  <script src="/admin/static/activate.js" defer></script>
+</body>
+</html>

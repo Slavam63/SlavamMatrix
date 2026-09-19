@@ -1,0 +1,103 @@
+:root {
+  --bg: #1a1208;
+  --ink: #f3f0e6;
+  --muted: #b8b39a;
+  --line: rgba(243, 240, 230, 0.25);
+  --accent: #2a6b45;
+  --btn: #f3f0e6;
+  --btn-ink: #1a1208;
+  --font: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --display: Palatino, "Palatino Linotype", "Book Antiqua", serif;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font);
+  color: var(--ink);
+  background: linear-gradient(160deg, #24180c, var(--bg) 50%, #120c06);
+}
+.wrap { max-width: 840px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+.wrap.narrow { max-width: 520px; }
+.eyebrow {
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin: 0 0 0.35rem;
+}
+h1 {
+  font-family: var(--display);
+  font-size: 1.75rem;
+  margin: 0 0 1rem;
+  font-weight: 650;
+}
+.lead { color: var(--muted); line-height: 1.5; }
+.hdr {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 1rem;
+  margin-bottom: 1.25rem;
+}
+.hdr-actions { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+.ds { font-size: 0.85rem; color: var(--muted); display: flex; gap: 0.4rem; align-items: center; }
+.ds select {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 0.35rem 0.5rem;
+}
+.stats {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1.25rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.stats p { margin: 0; color: var(--muted); }
+.stats strong { color: var(--ink); }
+.gate { color: var(--muted); }
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-height: 8rem;
+  margin-bottom: 1rem;
+}
+.bubble {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  background: rgba(243, 240, 230, 0.05);
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+.bubble.user { border-color: rgba(42, 107, 69, 0.55); }
+.bubble.meta { font-size: 0.9rem; color: var(--muted); }
+.ask label { display: block; margin-bottom: 0.45rem; }
+.ask textarea, #token {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  background: rgba(243, 240, 230, 0.06);
+  color: var(--ink);
+  font: inherit;
+  margin-bottom: 0.75rem;
+}
+.ask-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+.btn {
+  appearance: none;
+  border: 1px solid transparent;
+  min-height: 2.5rem;
+  padding: 0.5rem 1rem;
+  font: inherit;
+  cursor: pointer;
+}
+.btn.primary { background: var(--btn); color: var(--btn-ink); }
+.btn.ghost { background: transparent; color: var(--muted); border-color: var(--line); }
+.btn:hover { filter: brightness(1.05); }
+.note { margin-top: 1rem; color: var(--muted); font-size: 0.92rem; }
+a { color: var(--ink); }

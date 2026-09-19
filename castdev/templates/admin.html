@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>CASTDEV09.26 — аналитика</title>
+  <link rel="stylesheet" href="/admin/static/admin.css">
+</head>
+<body>
+  <div class="wrap" id="app">
+    <header class="hdr">
+      <div>
+        <p class="eyebrow">CASTDEV09.26</p>
+        <h1>Кастдев — аналитик</h1>
+      </div>
+      <div class="hdr-actions">
+        <label class="ds">
+          Массив
+          <select id="dataset">
+            <option value="production">production</option>
+            <option value="test">test</option>
+          </select>
+        </label>
+        <button type="button" class="btn ghost" id="btn-logout">Выйти</button>
+      </div>
+    </header>
+
+    <section class="stats" id="stats" hidden>
+      <p>Получено анкет: <strong id="total">—</strong></p>
+      <p>Последнее поступление: <strong id="latest">—</strong></p>
+    </section>
+
+    <section class="gate" id="gate">
+      <p>Административный доступ закрыт. Активируйте браузер Татьяны Воробьёвой.</p>
+      <p><a href="/admin/activate">Перейти к активации</a></p>
+    </section>
+
+    <section class="chat" id="chat" hidden>
+      <div class="thread" id="thread" aria-live="polite"></div>
+      <form id="ask-form" class="ask">
+        <label for="question">Задайте вопрос по результатам CASTDEV09.26</label>
+        <textarea id="question" rows="4" required placeholder="Например: как относятся к HH? какие доли?"></textarea>
+        <div class="ask-actions">
+          <button type="submit" class="btn primary">Спросить Кастдева</button>
+          <button type="button" class="btn ghost" id="btn-new">Новый диалог</button>
+          <button type="button" class="btn ghost" id="btn-snapshot">Скачать snapshot</button>
+        </div>
+      </form>
+      <p class="note" id="capability-note" hidden></p>
+    </section>
+  </div>
+  <script src="/admin/static/admin.js" defer></script>
+</body>
+</html>
