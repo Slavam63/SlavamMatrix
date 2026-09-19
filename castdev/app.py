@@ -182,12 +182,21 @@ def create_app() -> Flask:
             path="/",
         )
 
+    def _consteq(a: str | None, b: str | None) -> bool:
+        """Constant-time compare; never raise on length/type mismatch (pre-3.12 ValueError)."""
+        if a is None or b is None:
+            return False
+        try:
+            return hmac.compare_digest(str(a), str(b))
+        except (TypeError, ValueError):
+            return False
+
     def _check_csrf() -> bool:
         cookie = request.cookies.get(config.ADMIN_CSRF_COOKIE)
         header = request.headers.get("X-CSRF-Token")
         if not cookie or not header:
             return False
-        return hmac.compare_digest(cookie, header)
+        return _consteq(cookie, header)
 
     # Soft presence check for admin button (does not leak data)
     @app.get("/api/admin/session")
@@ -214,21 +223,32 @@ def create_app() -> Flask:
         token = raw.get("token") or request.args.get("token") or ""
         conn = _admin_conn()
         try:
-            ok = hmac.compare_digest(str(token), config.ADMIN_ACTIVATION_TOKEN)
-            conn.execute(
-                "INSERT INTO admin_activation_log(created_at, ok, note) VALUES (?, ?, ?)",
-                (
-                    __import__("datetime")
-                    .datetime.now(__import__("datetime").timezone.utc)
-                    .replace(microsecond=0)
-                    .isoformat(),
-                    1 if ok else 0,
-                    "activate",
-                ),
-            )
+            ok = _consteq(str(token), config.ADMIN_ACTIVATION_TOKEN)
+            try:
+                conn.execute(
+                    "INSERT INTO admin_activation_log(created_at, ok, note) VALUES (?, ?, ?)",
+                    (
+                        __import__("datetime")
+                        .datetime.now(__import__("datetime").timezone.utc)
+                        .replace(microsecond=0)
+                        .isoformat(),
+                        1 if ok else 0,
+                        "activate",
+                    ),
+                )
+            except Exception:
+                app.logger.exception("admin_activation_log_failed")
+                # Do not fail closed on logging alone when token is invalid
+                if not ok:
+                    return jsonify({"ok": False, "error": "invalid_token"}), 403
+                return jsonify({"ok": False, "error": "server_error"}), 500
             if not ok:
                 return jsonify({"ok": False, "error": "invalid_token"}), 403
-            sess = db.create_admin_session(conn)
+            try:
+                sess = db.create_admin_session(conn)
+            except Exception:
+                app.logger.exception("admin_activate_session_failed")
+                return jsonify({"ok": False, "error": "server_error"}), 500
             csrf = secrets.token_urlsafe(24)
             resp = make_response(
                 jsonify(
@@ -341,6 +361,3 @@ def create_app() -> Flask:
         return jsonify({"ok": False, "error": "server_error"}), 500
 
     return app
-
-
-# Fix typo: `,403` → `403` — I'll fix in the write... wait I wrote `.403` by mistake!
