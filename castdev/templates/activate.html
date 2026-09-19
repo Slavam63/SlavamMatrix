@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Активация браузера — CASTDEV09.26</title>
+  <link rel="stylesheet" href="/admin/static/admin.css">
+</head>
+<body>
+  <div class="wrap narrow">
+    <p class="eyebrow">CASTDEV09.26</p>
+    <h1>Активация браузера Татьяны</h1>
+    <p class="lead">
+      Однократная безопасная активация. После успеха этот браузер увидит кнопку
+      доступа к аналитике. Другие браузеры — нет. Не используем IP и fingerprint
+      как доказательство личности.
+    </p>
+    <form id="activate-form">
+      <label for="token">Код активации</label>
+      <input id="token" name="token" type="password" autocomplete="off" required>
+      <button type="submit" class="btn primary">Активировать</button>
+    </form>
+    <p id="status" role="status" aria-live="polite"></p>
+    <p><a href="/admin">К аналитике</a> · <a href="/">К анкете</a></p>
+  </div>
+  <script>
+    document.getElementById("activate-form").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var status = document.getElementById("status");
+      status.textContent = "…";
+      try {
+        var res = await fetch("/api/admin/activate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ token: document.getElementById("token").value })
+        });
+        var data = await res.json();
+        if (data.ok) {
+          status.textContent = "Готово. Браузер активирован. Переход в /admin…";
+          window.location.href = "/admin";
+        } else {
+          status.textContent = "Не удалось активировать (" + (data.error || res.status) + ").";
+        }
+      } catch (err) {
+        status.textContent = "Ошибка сети.";
+      }
+    });
+  </script>
+</body>
+</html>
