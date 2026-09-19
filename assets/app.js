@@ -18,6 +18,7 @@
 
   var current = "intro";
   var transitioning = false;
+  var transitionTimer = null;
   var redirectTimer = null;
   var shareStatusTimer = null;
   var submitting = false;
@@ -235,9 +236,19 @@
 
   function setScreen(name, options) {
     options = options || {};
-    if (transitioning && !options.force) return;
     if (SCREENS.indexOf(name) === -1) return;
-    if (name === current && !options.force) return;
+    if (name === current && !options.force && !transitioning) return;
+
+    // Allow Back/Next during leave animation: cancel pending transition.
+    if (transitionTimer) {
+      window.clearTimeout(transitionTimer);
+      transitionTimer = null;
+      transitioning = false;
+      var leaving = document.querySelector(".screen.is-leaving");
+      if (leaving) {
+        leaving.classList.remove("is-leaving");
+      }
+    }
 
     var fromEl = screenEl(current);
     var toEl = screenEl(name);
@@ -258,6 +269,7 @@
       });
       current = name;
       transitioning = false;
+      transitionTimer = null;
 
       if (name.charAt(0) === "q" && name.length === 2) {
         var ta = $(name);
@@ -277,7 +289,7 @@
     transitioning = true;
     fromEl.classList.add("is-leaving");
 
-    window.setTimeout(function () {
+    transitionTimer = window.setTimeout(function () {
       fromEl.classList.remove("is-leaving");
       fromEl.classList.remove("screen--active");
       fromEl.hidden = true;
