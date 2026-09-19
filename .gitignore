@@ -11,3 +11,10 @@ browser_profiles/
 *.log
 
 app/uploads/resumes/
+
+# CASTDEV09.26 local data (never commit research DB / backups)
+data/
+backups/
+*.sqlite
+*.sqlite-*
+

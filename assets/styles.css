@@ -258,23 +258,27 @@ a {
   font-size: 0.9rem;
 }
 
-/* Media frames */
+/* Media frames — part of one composition, not a competing card */
 .media {
   margin: 0;
   overflow: hidden;
-  border: 1px solid var(--border-soft);
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .media--hero {
   aspect-ratio: 16 / 9;
   width: 100%;
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow);
+  background: var(--bg-elevated);
 }
 
 .media--question {
   aspect-ratio: 16 / 9;
   width: 100%;
+  border: 1px solid rgba(249, 252, 186, 0.18);
 }
 
 .media__img {
@@ -561,6 +565,15 @@ a {
   text-decoration: underline;
 }
 
+.admin-entry {
+  margin: 0;
+}
+
+.admin-entry__link {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
 /* Desktop compositions */
 @media (min-width: 900px) {
   .intro-layout {
@@ -569,21 +582,19 @@ a {
     min-height: 28rem;
   }
 
+  /* Desktop Q1–Q4: text ALWAYS left, image ALWAYS right (no chess layout) */
   .question-layout {
     grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
     gap: 2.35rem;
     min-height: 28rem;
   }
 
-  .question-layout--alt .question-main {
-    order: 2;
-  }
-
-  .question-layout--alt .question-visual {
+  .question-main {
     order: 1;
   }
 
   .question-visual {
+    order: 2;
     padding-top: 2.35rem;
   }
 }
@@ -608,14 +619,10 @@ a {
     min-height: 9.5rem;
   }
 
-  /* Question: progress → title → visual strip → form */
+  /* Mobile: progress → title+hint together → image → field → actions
+     Image must NOT split title from hint. */
   .question-layout {
     grid-template-columns: 1fr;
-  }
-
-  .question-visual {
-    order: 0;
-    margin: -0.15rem 0 0.15rem;
   }
 
   .question-main {
@@ -623,26 +630,35 @@ a {
   }
 
   .question-main > .progress {
-    order: -2;
+    order: 1;
   }
 
   .question-main > .question__title {
-    order: -1;
+    order: 2;
+  }
+
+  .question-main > .question__hint {
+    order: 3;
   }
 
   .question-visual {
-    order: 0;
+    order: 4;
+    margin: 0.15rem 0 0.35rem;
   }
 
-  .question-main > .question__hint,
   .question-main > .field,
   .question-main > .submit-status,
   .question-main > .actions {
-    order: 1;
+    order: 5;
   }
 
   .media--question {
     max-height: 9.5rem;
+  }
+
+  .admin-entry {
+    width: 100%;
+    margin-top: 0.35rem;
   }
 
   .actions--intro {

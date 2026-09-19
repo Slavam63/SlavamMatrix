@@ -1,7 +1,8 @@
 /**
- * Лаборатория влияния — anonymous castdev survey
- * Step flow: Intro → Q1 → Q2 → Q3 → Q4 → (submit stub)
- * No mailto, no fetch, no storage, no trackers.
+ * Лаборатория влияния — anonymous castdev survey (Op9)
+ * Intro → Q1–Q4 → POST /api/castdev → Thank You → redirect
+ * No localStorage/sessionStorage/cookies for answers.
+ * Admin footer link only if authenticated admin session exists.
  */
 
 (function () {
@@ -9,6 +10,7 @@
 
   var REDIRECT_URL = "https://labinfluences.ru/";
   var REDIRECT_DELAY_MS = 5000;
+  var API_URL = "/api/castdev";
   var SHARE_TITLE = "Лаборатория влияния — кастдев";
 
   var SCREENS = ["intro", "q1", "q2", "q3", "q4", "success", "error"];
@@ -18,6 +20,8 @@
   var transitioning = false;
   var redirectTimer = null;
   var shareStatusTimer = null;
+  var submitting = false;
+  var submitToken = null;
 
   var app = document.getElementById("app");
   if (!app) return;
@@ -63,12 +67,19 @@
     }
   }
 
-  function showSubmitStubMessage() {
+  function showSubmitProgress() {
+    var status = $("submit-status");
+    if (!status) return;
+    status.hidden = false;
+    status.textContent = "Отправляем ответы…";
+  }
+
+  function showSubmitFailInline() {
     var status = $("submit-status");
     if (!status) return;
     status.hidden = false;
     status.textContent =
-      "Форма готова. Отправка ответов будет подключена перед запуском опроса.";
+      "Не удалось отправить ответы. Ваш текст сохранён на странице. Пожалуйста, попробуйте ещё раз.";
   }
 
   function clearShareStatus() {
@@ -212,6 +223,16 @@
     return QUESTION_ORDER.every(isFilled);
   }
 
+  function collectPayload() {
+    return {
+      q1: getAnswer("q1").trim(),
+      q2: getAnswer("q2").trim(),
+      q3: getAnswer("q3").trim(),
+      q4: getAnswer("q4").trim(),
+      submit_token: submitToken
+    };
+  }
+
   function setScreen(name, options) {
     options = options || {};
     if (transitioning && !options.force) return;
@@ -291,24 +312,13 @@
     }
   }
 
-  /**
-   * Current build: NO real submit, NO network call, NO success, NO redirect.
-   * Answers remain in the DOM only.
-   */
-  function handleSubmitStub() {
-    if (!validateCurrentQuestion("q4")) return;
-
-    if (!allAnswersFilled()) {
-      for (var i = 0; i < QUESTION_ORDER.length; i++) {
-        if (!isFilled(QUESTION_ORDER[i])) {
-          showError(QUESTION_ORDER[i], true);
-          setScreen(QUESTION_ORDER[i]);
-          return;
-        }
-      }
+  function setSubmitBusy(busy) {
+    submitting = !!busy;
+    var btn = $("btn-submit");
+    if (btn) {
+      btn.disabled = !!busy;
+      btn.setAttribute("aria-busy", busy ? "true" : "false");
     }
-
-    showSubmitStubMessage();
   }
 
   function showSuccessAndScheduleRedirect() {
@@ -331,6 +341,99 @@
 
   function retryFromError() {
     setScreen("q4", { force: true });
+  }
+
+  function newSubmitToken() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return window.crypto.randomUUID();
+    }
+    return "st-" + String(Date.now()) + "-" + String(Math.random()).slice(2, 10);
+  }
+
+  /**
+   * Real submit: POST /api/castdev with q1–q4 only (+ submit_token for dedup).
+   * Success screen ONLY after confirmed backend ok.
+   * On error: keep answers in DOM, no redirect.
+   */
+  function handleSubmit() {
+    if (submitting) return;
+    if (!validateCurrentQuestion("q4")) return;
+
+    if (!allAnswersFilled()) {
+      for (var i = 0; i < QUESTION_ORDER.length; i++) {
+        if (!isFilled(QUESTION_ORDER[i])) {
+          showError(QUESTION_ORDER[i], true);
+          setScreen(QUESTION_ORDER[i]);
+          return;
+        }
+      }
+    }
+
+    if (!submitToken) {
+      submitToken = newSubmitToken();
+    }
+
+    setSubmitBusy(true);
+    showSubmitProgress();
+
+    fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      credentials: "same-origin",
+      body: JSON.stringify(collectPayload())
+    })
+      .then(function (res) {
+        return res.json().then(
+          function (data) {
+            return { res: res, data: data };
+          },
+          function () {
+            return { res: res, data: null };
+          }
+        );
+      })
+      .then(function (result) {
+        setSubmitBusy(false);
+        if (result.res.ok && result.data && result.data.ok) {
+          clearSubmitStatus();
+          submitToken = null;
+          showSuccessAndScheduleRedirect();
+          return;
+        }
+        showSubmitFailInline();
+        showErrorScreen();
+      })
+      .catch(function () {
+        setSubmitBusy(false);
+        showSubmitFailInline();
+        showErrorScreen();
+      });
+  }
+
+  function probeAdminButton() {
+    var entry = $("admin-entry");
+    if (!entry) return;
+    fetch("/api/admin/session", {
+      method: "GET",
+      credentials: "same-origin",
+      headers: { Accept: "application/json" }
+    })
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (data) {
+        if (data && data.authenticated) {
+          entry.hidden = false;
+        } else {
+          entry.hidden = true;
+        }
+      })
+      .catch(function () {
+        entry.hidden = true;
+      });
   }
 
   QUESTION_ORDER.forEach(function (qid) {
@@ -367,7 +470,7 @@
       return;
     }
     if (action === "submit") {
-      handleSubmitStub();
+      handleSubmit();
       return;
     }
     if (action === "retry") {
@@ -375,9 +478,12 @@
     }
   });
 
+  probeAdminButton();
+
   window.CastdevSurvey = {
     showSuccessAndScheduleRedirect: showSuccessAndScheduleRedirect,
     showErrorScreen: showErrorScreen,
-    REDIRECT_URL: REDIRECT_URL
+    REDIRECT_URL: REDIRECT_URL,
+    API_URL: API_URL
   };
 })();
