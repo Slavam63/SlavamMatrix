@@ -1,0 +1,342 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CASTDEV09.26 Analyst API",
+    "version": "1.0.0",
+    "description": "READ-ONLY Analytics API for Главный Аналитик (ChatGPT / Ёжик).\n\nAuth: Authorization Bearer token (CASTDEV_ANALYST_API_TOKEN on server). Never put token in query string.\n\nAnalytical rules (short):\n1) RAW q1–q4 is truth; 2) derived is interpretation; 3) distinguish raw vs derived; 4) multi-label OK; 5) unit = whole survey; 6) always N+%; 7) small-N limits; 8) hypotheses separate; 9) evidence for claims; 10) prod/test never mixed; 11) aggregates→evidence; 12) read-only.\n\nPrefer /aggregates then /evidence. Examples use synthetic placeholders only."
+  },
+  "servers": [
+    {
+      "url": "https://castdev0926.labinfluences.su",
+      "description": "Production CASTDEV09.26"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API_TOKEN",
+        "description": "CASTDEV_ANALYST_API_TOKEN from server env. Configure in Custom GPT Actions as API Key → Bearer."
+      }
+    },
+    "parameters": {
+      "dataset": {
+        "name": "dataset",
+        "in": "query",
+        "schema": {
+          "type": "string",
+          "enum": ["production", "test"],
+          "default": "production"
+        },
+        "description": "Isolated DB files — never mixed."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean", "example": false },
+          "error": { "type": "string", "example": "unauthorized" }
+        }
+      },
+      "Status": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean", "example": true },
+          "api_version": { "type": "string", "example": "1" },
+          "dataset": { "type": "string", "example": "production" },
+          "count": { "type": "integer", "example": 12 },
+          "last_answer": { "type": "string", "example": "2026-09-19T12:00:00+00:00" },
+          "derived": {
+            "type": "object",
+            "properties": {
+              "derived_present": { "type": "boolean" },
+              "method": { "type": "string", "example": "semantic_rules_v1" },
+              "last_recompute": { "type": "string", "nullable": true }
+            }
+          },
+          "read_only": { "type": "boolean", "example": true }
+        }
+      },
+      "ResponseItem": {
+        "type": "object",
+        "properties": {
+          "survey_id": { "type": "string", "example": "00000000-0000-4000-8000-000000000001" },
+          "response_id": { "type": "string", "example": "00000000-0000-4000-8000-000000000001" },
+          "submitted_at": { "type": "string", "example": "2026-09-19T12:00:00+00:00" },
+          "q1": { "type": "string", "example": "[synthetic] Ищу через знакомых" },
+          "q2": { "type": "string", "example": "[synthetic] Смотрю на содержание роли" },
+          "q3": { "type": "string", "example": "[synthetic] Сложно на первом контакте" },
+          "q4": { "type": "string", "example": "[synthetic] Хочу изменить подход" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/analyst/v1/openapi.json": {
+      "get": {
+        "operationId": "getOpenApiSchema",
+        "summary": "OpenAPI contract (public, no secrets)",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.x JSON"
+          }
+        }
+      }
+    },
+    "/api/analyst/v1/status": {
+      "get": {
+        "operationId": "getAnalystStatus",
+        "summary": "Dataset status: count, last answer, derived presence",
+        "parameters": [
+          { "$ref": "#/components/parameters/dataset" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Status" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analyst/v1/responses": {
+      "get": {
+        "operationId": "listAnalystResponses",
+        "summary": "Paginated anonymous RAW responses",
+        "parameters": [
+          { "$ref": "#/components/parameters/dataset" },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 50, "maximum": 200 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": { "type": "integer", "default": 0 }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "ISO timestamp lower bound"
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "ISO timestamp upper bound"
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Comma-separated survey_id / response_id list"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page of RAW items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "total": { "type": "integer" },
+                    "items": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ResponseItem" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analyst/v1/derived": {
+      "get": {
+        "operationId": "getAnalystDerived",
+        "summary": "Derived classifications and themes (not RAW replacement)",
+        "parameters": [
+          { "$ref": "#/components/parameters/dataset" },
+          {
+            "name": "response_id",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "survey_id",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "question",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["q1", "q2", "q3", "q4", "cross"]
+            }
+          },
+          {
+            "name": "feature_key",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "feature_value",
+            "in": "query",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Derived features + themes" },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analyst/v1/aggregates": {
+      "get": {
+        "operationId": "getAnalystAggregates",
+        "summary": "Counts, shares, themes, distributions, cross Q1–Q4",
+        "parameters": [
+          { "$ref": "#/components/parameters/dataset" },
+          {
+            "name": "cross",
+            "in": "query",
+            "schema": { "type": "string", "default": "1" },
+            "description": "Include cross-question links (1/0)"
+          },
+          {
+            "name": "feature_key",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "feature_value",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "question",
+            "in": "query",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Aggregates (prefer before evidence)" },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analyst/v1/evidence": {
+      "get": {
+        "operationId": "getAnalystEvidence",
+        "summary": "Confirming anonymous RAW answers for a feature or ids",
+        "parameters": [
+          { "$ref": "#/components/parameters/dataset" },
+          {
+            "name": "feature_key",
+            "in": "query",
+            "schema": { "type": "string", "example": "channel_stance:hh" }
+          },
+          {
+            "name": "feature_value",
+            "in": "query",
+            "schema": { "type": "string", "example": "positive_use" }
+          },
+          {
+            "name": "question",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["q1", "q2", "q3", "q4"]
+            }
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20, "maximum": 100 }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Evidence RAW items" },
+          "400": { "description": "Missing feature or ids" },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analyst/v1/rules": {
+      "get": {
+        "operationId": "getAnalystRules",
+        "summary": "Analytical rules for Ёжик",
+        "responses": {
+          "200": { "description": "Rules list" },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

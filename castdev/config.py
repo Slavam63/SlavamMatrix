@@ -51,9 +51,24 @@ ALLOW_TEST_SUBMIT = os.environ.get("CASTDEV_ALLOW_TEST_SUBMIT", "").lower() in (
     "yes",
 )
 
+# Machine Analyst API (ChatGPT / Ёжик). Server env only — never ship to frontend/git/logs.
+# Empty → fail closed (all /api/analyst/v1 data routes 401).
+ANALYST_API_TOKEN = os.environ.get("CASTDEV_ANALYST_API_TOKEN", "")
+ANALYST_API_VERSION = "1"
+ANALYST_FLOOD_WINDOW_SECONDS = int(
+    os.environ.get("CASTDEV_ANALYST_FLOOD_WINDOW_SECONDS", "60")
+)
+ANALYST_FLOOD_MAX_PER_WINDOW = int(
+    os.environ.get("CASTDEV_ANALYST_FLOOD_MAX_PER_WINDOW", "60")
+)
+ANALYST_DEFAULT_PAGE_LIMIT = int(os.environ.get("CASTDEV_ANALYST_PAGE_LIMIT", "50"))
+ANALYST_MAX_PAGE_LIMIT = int(os.environ.get("CASTDEV_ANALYST_MAX_PAGE_LIMIT", "200"))
+
 STATIC_ROOT = ROOT  # index.html + assets/ live at repo root for public survey
 ADMIN_STATIC = Path(__file__).resolve().parent / "static"
 ADMIN_TEMPLATES = Path(__file__).resolve().parent / "templates"
+ANALYST_OPENAPI_PATH = Path(__file__).resolve().parent / "openapi" / "analyst_v1.json"
+ANALYST_RULES_PATH = Path(__file__).resolve().parent / "docs" / "analyst_rules_ru.txt"
 
 
 def ensure_dirs() -> None:
