@@ -36,6 +36,7 @@ def create_app() -> Flask:
         template_folder=str(config.ADMIN_TEMPLATES),
     )
     app.config["SECRET_KEY"] = config.ADMIN_SESSION_SECRET
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
 
     # ----- Security headers -----
     @app.after_request
