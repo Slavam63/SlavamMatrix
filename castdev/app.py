@@ -19,7 +19,7 @@ from flask import (
     render_template,
 )
 
-from . import analyst, classify, config, db, stats, validate
+from . import analyst, cabinet, classify, config, db, stats, validate
 from .db import Dataset
 
 # In-memory flood buckets — NOT written to research DB (no IP profiling in research).
@@ -201,7 +201,20 @@ def create_app() -> Flask:
     # Soft presence check for admin button (does not leak data)
     @app.get("/api/admin/session")
     def admin_session_status():
-        return jsonify({"ok": True, "authenticated": _is_admin()})
+        # Optional force source for local/dev smoke (never exposes English "production")
+        import os
+
+        forced = (os.environ.get("CASTDEV_ADMIN_FORCE_DATASET") or "").strip()
+        data_source = "test" if forced == "test" else "production"
+        show_test = bool(config.ALLOW_TEST_SUBMIT) or forced == "test"
+        return jsonify(
+            {
+                "ok": True,
+                "authenticated": _is_admin(),
+                "data_source": data_source,
+                "show_test_toggle": show_test,
+            }
+        )
 
     # One-time browser activation for Tatiana
     @app.post("/api/admin/activate")
@@ -292,10 +305,16 @@ def create_app() -> Flask:
             conn.close()
 
     def _dataset_from_request() -> Dataset:
+        import os
+
+        forced = (os.environ.get("CASTDEV_ADMIN_FORCE_DATASET") or "").strip()
+        if forced == "test":
+            return "test"
         ds = request.args.get("dataset") or (request.get_json(silent=True) or {}).get(
             "dataset"
         )
-        if ds == "test":
+        # Test source only when explicitly allowed (dev/selftest) or forced
+        if ds == "test" and (config.ALLOW_TEST_SUBMIT or forced == "test"):
             return "test"
         return "production"
 
@@ -306,10 +325,21 @@ def create_app() -> Flask:
             return denied
         dataset = _dataset_from_request()
         with db.session(dataset) as conn:
-            sm = stats.summary(conn, dataset)
+            sm = cabinet.build_cabinet(conn, dataset)
             sm["ok"] = True
-            sm["dataset"] = dataset
             return jsonify(sm)
+
+    @app.get("/api/admin/answers")
+    def admin_answers():
+        denied = _require_admin()
+        if denied:
+            return denied
+        dataset = _dataset_from_request()
+        qf = request.args.get("question") or "all"
+        with db.session(dataset) as conn:
+            table = cabinet.answers_table(conn, dataset, question=qf)
+            table["ok"] = True
+            return jsonify(table)
 
     @app.post("/api/admin/ask")
     def admin_ask():
@@ -320,23 +350,43 @@ def create_app() -> Flask:
             return jsonify({"ok": False, "error": "csrf"}), 403
         raw = request.get_json(silent=True) or {}
         question = raw.get("question", "")
-        dataset: Dataset = "test" if raw.get("dataset") == "test" else "production"
+        dataset = _dataset_from_request()
+        if raw.get("dataset") == "test" and config.ALLOW_TEST_SUBMIT:
+            dataset = "test"
         with db.session(dataset) as conn:
             result = analyst.answer(conn, question, dataset=dataset)
             return jsonify(result)
 
+    @app.get("/api/admin/export")
+    def admin_export():
+        """Protected analyst data export (auth required). Not a public raw endpoint."""
+        denied = _require_admin()
+        if denied:
+            return denied
+        dataset = _dataset_from_request()
+        fmt = (request.args.get("format") or "json").lower()
+        with db.session(dataset) as conn:
+            if fmt == "csv":
+                text = cabinet.export_csv_text(conn, dataset)
+                resp = make_response(text)
+                resp.headers["Content-Type"] = "text/csv; charset=utf-8"
+                resp.headers["Content-Disposition"] = (
+                    'attachment; filename="castdev0926-export.csv"'
+                )
+                return resp
+            payload = cabinet.export_payload(conn, dataset, fmt="json")
+            return jsonify(payload)
+
     @app.get("/api/admin/snapshot")
     def admin_snapshot():
+        """Backward-compatible alias → export (no Cursor/LLM integration fields)."""
         denied = _require_admin()
         if denied:
             return denied
         dataset = _dataset_from_request()
         with db.session(dataset) as conn:
-            snap = db.export_snapshot(conn, dataset)
-            snap["ok"] = True
-            snap["llm_available"] = analyst.llm_available()
-            snap["integration_point"] = "castdev.analyst.answer / CASTDEV_LLM_API_KEY"
-            return jsonify(snap)
+            payload = cabinet.export_payload(conn, dataset, fmt="json")
+            return jsonify(payload)
 
     # Admin UI pages — no data without session; page shell may load but APIs 401
     @app.get("/admin")

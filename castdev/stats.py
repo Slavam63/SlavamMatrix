@@ -14,7 +14,7 @@ MSK = ZoneInfo("Europe/Moscow")
 
 
 def format_msk(iso_ts: str | None) -> str | None:
-    """Format stored UTC/ISO timestamp as «DD.MM.YYYY в HH:MM (MSK)»."""
+    """Format stored UTC/ISO timestamp as «DD.MM.YYYY в HH:MM (мск)»."""
     if not iso_ts:
         return None
     raw = iso_ts.strip()
@@ -28,7 +28,7 @@ def format_msk(iso_ts: str | None) -> str | None:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         local = dt.astimezone(MSK)
-        return local.strftime("%d.%m.%Y в %H:%M (MSK)")
+        return local.strftime("%d.%m.%Y в %H:%M (мск)")
     except ValueError:
         return iso_ts
 

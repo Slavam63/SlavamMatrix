@@ -23,7 +23,9 @@ os.environ["CASTDEV_ALLOW_TEST_SUBMIT"] = "1"
 from castdev import classify, config, db, stats, analyst  # noqa: E402
 from castdev.seed_test import seed_test, TEST_RESPONSES  # noqa: E402
 from castdev.app import create_app  # noqa: E402
+from castdev import cabinet  # noqa: E402
 
+TEST_N = len(TEST_RESPONSES)
 
 def check(name: str, cond: bool, detail: str = "") -> dict:
     return {"name": name, "pass": bool(cond), "detail": detail}
@@ -43,7 +45,6 @@ def expected_hh_stances():
         "hh_abandoned_min": 1,  # resp 2 (and possibly 8 in q4)
         "distinct_stances": True,
     }
-
 
 def run() -> dict:
     results = []
@@ -76,11 +77,11 @@ def run() -> dict:
 
     # --- Seed TEST ---
     seeded = seed_test(wipe=True)
-    results.append(check("seed_test_count", seeded["count"] == 10, str(seeded["count"])))
+    results.append(check("seed_test_count", seeded["count"] == TEST_N, str(seeded["count"])))
 
     with db.session("test") as conn:
         total = stats.total_count(conn, "test")
-        results.append(check("stats_total", total == 10, str(total)))
+        results.append(check("stats_total", total == TEST_N, str(total)))
 
         exp = expected_hh_stances()
         opp = stats.opposing_stances(conn, "hh", "test")
@@ -151,7 +152,7 @@ def run() -> dict:
 
         # Period count
         pc = stats.period_count(conn, "test", days=30)
-        results.append(check("period_count_30d", pc["count"] == 10, str(pc)))
+        results.append(check("period_count_30d", pc["count"] == TEST_N, str(pc)))
 
         # MSK display
         latest = db.latest_created_at(conn, "test")
@@ -161,25 +162,40 @@ def run() -> dict:
                 "format_msk_shape",
                 bool(latest_disp)
                 and " в " in latest_disp
-                and "(MSK)" in latest_disp
+                and "(мск)" in latest_disp
                 and "T" not in latest_disp,
                 str(latest_disp),
             )
         )
-        sm = stats.summary(conn, "test")
+        cab = cabinet.build_cabinet(conn, "test")
         results.append(
             check(
-                "summary_has_matrix_and_responses",
-                isinstance(sm.get("feature_matrix"), dict)
-                and "q1" in sm["feature_matrix"]
-                and isinstance(sm.get("responses"), list)
-                and len(sm["responses"]) == 10
-                and sm.get("latest_display")
-                and sm.get("dataset_label") == "Тестовые",
-                f"matrix_keys={list((sm.get('feature_matrix') or {}).keys())} n={len(sm.get('responses') or [])}",
+                "cabinet_themes_and_answers",
+                isinstance(cab.get("themes"), dict)
+                and "q1" in cab["themes"]
+                and cab["themes"]["q1"]["themes"]
+                and cab.get("answers_all", {}).get("rows")
+                and len(cab["answers_all"]["rows"]) == TEST_N
+                and cab.get("cross", {}).get("links") is not None
+                and cab.get("latest_display")
+                and "(мск)" in (cab.get("latest_display") or ""),
+                f"themes={len(cab.get('themes',{}))} rows={len(cab.get('answers_all',{}).get('rows',[]))}",
             )
         )
-        q2_title = (sm.get("question_titles") or {}).get("q2", "")
+        # Dynamic columns from data for q1
+        q1_table = cabinet.answers_table(conn, "test", question="q1")
+        results.append(
+            check(
+                "dynamic_feature_columns",
+                len(q1_table.get("columns") or []) >= 1
+                and any(
+                    row.get("cells") and any(row["cells"].values())
+                    for row in q1_table.get("rows") or []
+                ),
+                f"cols={len(q1_table.get('columns') or [])}",
+            )
+        )
+        q2_title = (cab.get("question_titles") or {}).get("q2", "")
         results.append(
             check(
                 "no_voopros_typo",
@@ -195,6 +211,7 @@ def run() -> dict:
             ("Покажи характерные цитаты по q1", "quotes"),
             ("Какая динамика поступления?", "trend"),
             ("Есть ли противоречия?", "contradiction"),
+            ("Какие сочетания признаков между вопросами?", "cross"),
             ("Сколько респондентов с Марса?", "insufficient"),
         ]:
             ans = analyst.answer(conn, q, dataset="test")
@@ -202,16 +219,20 @@ def run() -> dict:
             results.append(
                 check(
                     f"analyst_{kind_hint}",
-                    ans.get("ok") and ans.get("total_responses") == 10,
+                    ans.get("ok") and ans.get("total_responses") == TEST_N,
                     text[:120],
                 )
             )
             results.append(
                 check(
-                    f"analyst_{kind_hint}_narrative",
-                    "Контекст" in text
-                    and ("Факт" in text or "факт" in text.lower() or "недостаточно" in text.lower()),
-                    text[:220],
+                    f"analyst_{kind_hint}_memo",
+                    "Короткий вывод" in text
+                    and "Что видно в данных" in text
+                    and "Сколько человек" in text
+                    and "Характерные ответы" in text
+                    and "Что можно предположить" in text
+                    and "Ограничения" in text,
+                    text[:280],
                 )
             )
             results.append(
@@ -220,6 +241,7 @@ def run() -> dict:
                     "CASTDEV_LLM_API_KEY" not in text
                     and "_llm_enrich" not in text
                     and "/api/admin/snapshot" not in text
+                    and "Cursor" not in text
                     and not ans.get("capability_note"),
                     str(ans.get("capability_note")),
                 )
@@ -229,7 +251,8 @@ def run() -> dict:
                     check(
                         "analyst_insufficient_honest",
                         "недостаточно" in text.lower()
-                        or "нет данных" in text.lower(),
+                        or "нет данных" in text.lower()
+                        or "данных нет" in text.lower(),
                         text[:160],
                     )
                 )
@@ -396,13 +419,40 @@ def run() -> dict:
         )
     )
 
-    # Snapshot
+    # Snapshot / export (protected)
     snap = client.get("/api/admin/snapshot?dataset=test")
+    snap_body = snap.get_json() or {}
     results.append(
         check(
-            "snapshot",
-            snap.status_code == 200 and snap.get_json().get("total", 0) >= 10,
-            {"total": (snap.get_json() or {}).get("total")},
+            "snapshot_alias_export",
+            snap.status_code == 200
+            and snap_body.get("total", 0) >= TEST_N
+            and "integration_point" not in snap_body
+            and "CASTDEV_LLM" not in json.dumps(snap_body),
+            {"total": snap_body.get("total"), "keys": list(snap_body.keys())[:12]},
+        )
+    )
+    exp = client.get("/api/admin/export?format=json&dataset=test")
+    exp_body = exp.get_json() or {}
+    results.append(
+        check(
+            "admin_export_json",
+            exp.status_code == 200
+            and exp_body.get("ok")
+            and exp_body.get("total", 0) >= TEST_N
+            and "themes" in exp_body
+            and "responses" in exp_body,
+            {"total": exp_body.get("total")},
+        )
+    )
+    exp_csv = client.get("/api/admin/export?format=csv&dataset=test")
+    results.append(
+        check(
+            "admin_export_csv",
+            exp_csv.status_code == 200
+            and "text/csv" in (exp_csv.headers.get("Content-Type") or "")
+            and b"q1" in exp_csv.data,
+            exp_csv.headers.get("Content-Type"),
         )
     )
 
@@ -423,35 +473,26 @@ def run() -> dict:
     admin_html = client.get("/admin").get_data(as_text=True)
     results.append(
         check(
-            "admin_ui_russian_dataset",
-            "Боевые ответы" in admin_html
-            and "Тестовые" in admin_html
+            "admin_ui_cabinet_labels",
+            "Кабинет аналитика" in admin_html
             and "Массив" not in admin_html
-            and "Источник данных" in admin_html,
-            "dataset labels",
-        )
-    )
-    results.append(
-        check(
-            "admin_ui_no_voopros",
-            "Воопрос" not in admin_html,
-            "typo check",
-        )
-    )
-    results.append(
-        check(
-            "admin_ui_has_tables",
-            "feature-matrix" in admin_html
-            and "resp-table" in admin_html
-            and "Смысловые признаки" in admin_html,
-            "tables markup",
+            and "Сводка" in admin_html
+            and "Темы по вопросам" in admin_html
+            and "Ответы и признаки" in admin_html
+            and "Связи между вопросами" in admin_html
+            and "Спросить Кастдева" in admin_html
+            and "Выгрузить данные" in admin_html
+            and "snapshot" not in admin_html.lower()
+            and "Воопрос" not in admin_html,
+            "cabinet chrome",
         )
     )
     results.append(
         check(
             "admin_ui_no_capability_note_slot",
             "capability-note" not in admin_html
-            and "_llm_enrich" not in admin_html,
+            and "_llm_enrich" not in admin_html
+            and "LLM API" not in admin_html,
             "junk removed from template",
         )
     )
@@ -491,7 +532,7 @@ def run() -> dict:
     conn_r = sqlite3.connect(str(restore_dest))
     n = conn_r.execute("SELECT COUNT(*) FROM responses").fetchone()[0]
     conn_r.close()
-    results.append(check("backup_restore_test_copy", n >= 10, f"restored_count={n}"))
+    results.append(check("backup_restore_test_copy", n >= TEST_N, f"restored_count={n}"))
 
     # No IP columns in schema
     conn_s = sqlite3.connect(str(config.TEST_DB_PATH))
@@ -517,7 +558,7 @@ def run() -> dict:
         "llm_available": analyst.llm_available(),
         "classification_note": classify.explain_not_keyword_only(),
         "expected_vs_actual": {
-            "total_expected": 10,
+            "total_expected": TEST_N,
             "total_actual": total,
             "hh_stances_actual": {
                 k: opp[k]["display"]

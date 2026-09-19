@@ -45,6 +45,11 @@ LLM_MODEL = os.environ.get("CASTDEV_LLM_MODEL", "gpt-4o-mini")
 HOST = os.environ.get("CASTDEV_HOST", "127.0.0.1")
 PORT = int(os.environ.get("CASTDEV_PORT", "8092"))
 DEBUG = os.environ.get("CASTDEV_DEBUG", "").lower() in ("1", "true", "yes")
+ALLOW_TEST_SUBMIT = os.environ.get("CASTDEV_ALLOW_TEST_SUBMIT", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 STATIC_ROOT = ROOT  # index.html + assets/ live at repo root for public survey
 ADMIN_STATIC = Path(__file__).resolve().parent / "static"

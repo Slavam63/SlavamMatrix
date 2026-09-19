@@ -1,14 +1,13 @@
-"""Natural-language analyst for Tatiana — deterministic engine + optional LLM hook.
+"""Natural-language analyst for Tatiana — research memo + optional LLM hook.
 
-Without CASTDEV_LLM_API_KEY / OPENAI_API_KEY the deterministic engine produces a
-rich Russian narrative report (context, N из D, %, quotes, факт vs наблюдение).
+Without LLM key: deterministic analytical memo in Russian.
+Honest about limits; never invents market knowledge as data.
 """
 
 from __future__ import annotations
 
 import json
 import re
-import urllib.error
 import urllib.request
 from typing import Any
 
@@ -48,9 +47,19 @@ def _detect_intent(question: str) -> dict[str, Any]:
         "want_contradiction": bool(re.search(r"противореч|расхожд", q)),
         "want_compare": bool(re.search(r"сравн|versus|vs\b|против", q)),
         "want_count": bool(re.search(r"сколько|число|количеств|процент|доля|%\b", q)),
+        "want_cross": bool(
+            re.search(r"связ|сочета|одних\s+и\s+тех|межвопрос|пересечен", q)
+        ),
         "channel": None,
         "insufficient_ok": bool(
             re.search(r"марс|марсиан|инопланет|несуществующ|юпитер|атлантид", q)
+        ),
+        "needs_open_llm": bool(
+            re.search(
+                r"напиши\s+эссе|сочини|придумай|как\s+на\s+рынке\s+вообще|"
+                r"по\s+твоему\s+мнению\s+без\s+данных|предскажи\s+будущ",
+                q,
+            )
         ),
     }
     qs = []
@@ -80,6 +89,8 @@ def _detect_intent(question: str) -> dict[str, Any]:
 
     if intent["want_contradiction"]:
         intent["kind"] = "contradiction"
+    elif intent["want_cross"]:
+        intent["kind"] = "cross"
     elif intent["want_trend"]:
         intent["kind"] = "trend"
     elif intent["want_compare"] and intent["channel"]:
@@ -93,39 +104,40 @@ def _detect_intent(question: str) -> dict[str, Any]:
     return intent
 
 
-def _context_block(dataset: Dataset, total: int, latest: str | None) -> list[str]:
-    ds_label = labels_ru.DATASET_LABELS.get(dataset, dataset)
-    lines = [
-        f"Контекст. Набор данных: «{ds_label}» (CASTDEV09.26).",
-        f"В выборке сейчас {total} анкет.",
+def _memo(
+    *,
+    short: str,
+    seen: list[str],
+    counts: list[str],
+    quotes: list[str],
+    assume: list[str],
+    limits: list[str],
+) -> str:
+    def bullets(items: list[str], empty: str) -> list[str]:
+        if not items:
+            return [f"• {empty}"]
+        return [f"• {x}" for x in items]
+
+    parts = [
+        "Короткий вывод",
+        short.strip(),
+        "",
+        "Что видно в данных",
+        *bullets(seen, "По выбранному срезу отдельных наблюдений мало."),
+        "",
+        "Сколько человек",
+        *bullets(counts, "Численность среза не рассчитана."),
+        "",
+        "Характерные ответы",
+        *bullets(quotes, "Подходящих цитат в выборке нет."),
+        "",
+        "Что можно предположить",
+        *bullets(assume, "Дополнительных предположений нет."),
+        "",
+        "Ограничения",
+        *bullets(limits, "Ограничения не указаны."),
     ]
-    disp = stats.format_msk(latest)
-    if disp:
-        lines.append(f"Последнее поступление: {disp}.")
-    return lines
-
-
-def _fact_line(label: str, block: dict[str, Any]) -> str:
-    return f"• {label}: {block['numerator']} из {block['denominator']} — {block['percentage']}%."
-
-
-def _quotes_block(quotes: list[dict[str, Any]]) -> list[str]:
-    if not quotes:
-        return []
-    lines = ["", "Характерные формулировки (RAW, без искажений):"]
-    for q in quotes:
-        title = labels_ru.QUESTION_TITLES.get(q["question"], q["question"])
-        lines.append(f"• [{title}] «{q['quote']}»")
-    return lines
-
-
-def _observations_block(observations: list[str]) -> list[str]:
-    if not observations:
-        return []
-    lines = ["", "Наблюдения (интерпретация методики, не прямой ответ респондентов):"]
-    for o in observations:
-        lines.append(f"• {o}")
-    return lines
+    return "\n".join(parts)
 
 
 def answer(conn, question: str, *, dataset: Dataset = "production") -> dict[str, Any]:
@@ -142,6 +154,7 @@ def answer(conn, question: str, *, dataset: Dataset = "production") -> dict[str,
     intent = _detect_intent(question)
     latest = db.latest_created_at(conn, dataset) if total else None
     ds_label = labels_ru.DATASET_LABELS.get(dataset, dataset)
+    latest_disp = stats.format_msk(latest)
 
     base = {
         "ok": True,
@@ -152,128 +165,137 @@ def answer(conn, question: str, *, dataset: Dataset = "production") -> dict[str,
         "total_responses": total,
         "intent": intent,
         "source": "CASTDEV09.26 database",
+        "capability_note": None,
         "disclaimer": (
             "Источник истины — база CASTDEV09.26. "
-            "Интерпретации помечены отдельно от фактов. "
+            "Предположения отделены от фактов. "
             "Общие знания о рынке труда не подменяют данные исследования."
         ),
     }
 
+    default_limits = [
+        "Выводы опираются только на заполненные анкеты CASTDEV09.26, не на рынок в целом.",
+        "Классификация смысловая (правила), не замена ручному чтению всех формулировок.",
+        "RAW-ответы не изменялись; признаки пересчитываются из RAW.",
+    ]
+
     if total == 0:
-        base["answer_text"] = (
-            f"Контекст. В наборе «{ds_label}» пока нет анкет CASTDEV09.26.\n"
-            "Факт: 0 из 0 — н/д.\n"
-            "Недостаточно данных для анализа; ответ не выдуман."
+        text = _memo(
+            short="В выбранном наборе пока нет анкет — анализировать нечего.",
+            seen=[f"Набор «{ds_label}» пуст."],
+            counts=["0 анкет."],
+            quotes=[],
+            assume=[],
+            limits=["Недостаточно данных; ответ не выдуман."] + default_limits,
         )
+        base["answer_text"] = text
         base["facts"] = []
         base["observations"] = []
         return base
 
     if intent["kind"] == "insufficient":
-        base["answer_text"] = "\n".join(
-            _context_block(dataset, total, latest)
-            + [
-                "",
-                "Факты:",
-                "• По этой теме в базе CASTDEV09.26 релевантных ответов нет: "
-                f"0 из {total} — 0%.",
-                "",
-                "Вывод: недостаточно данных — ответ не выдуман.",
-            ]
+        text = _memo(
+            short="По этой теме в базе CASTDEV09.26 данных нет.",
+            seen=[
+                f"Вопрос не соотносится с содержанием анкет (вопросы 1–4).",
+                f"В выборке {total} анкет, но релевантных ответов по теме — 0.",
+            ],
+            counts=[f"Релевантных: 0 из {total} — 0%."],
+            quotes=[],
+            assume=[],
+            limits=["Недостаточно данных — ответ не выдуман."] + default_limits,
         )
+        base["answer_text"] = text
         base["facts"] = [stats.pct(0, total) | {"label": "релевантных ответов"}]
         return base
 
-    facts: list[dict[str, Any]] = []
+    facts: list[dict[str, Any]] = [{"label": "всего анкет", **stats.pct(total, total)}]
     observations: list[str] = []
     quotes: list[dict[str, Any]] = []
-    sections: list[str] = []
+    seen_lines: list[str] = []
+    count_lines: list[str] = [f"Всего анкет в наборе «{ds_label}»: {total}."]
+    if latest_disp:
+        count_lines.append(f"Последний ответ: {latest_disp}.")
+    assume_lines: list[str] = []
+    limit_lines = list(default_limits)
+    short = ""
 
-    facts.append({"label": "всего анкет", **stats.pct(total, total)})
-    sections.extend(_context_block(dataset, total, latest))
-
-    if intent["kind"] in ("overview", "quantitative", "focused"):
-        sm = stats.summary(conn, dataset)
-        p7 = sm["period_7d"]
-        facts.append({"label": "за 7 дней", **{k: p7[k] for k in ("numerator", "denominator", "percentage", "display")}})
-        sections.append("")
-        sections.append("Факты по выборке:")
-        sections.append(_fact_line("Всего анкет", stats.pct(total, total)))
-        sections.append(
-            f"• За последние 7 дней поступило: {p7['numerator']} из {p7['denominator']} "
-            f"— {p7['percentage']}%."
+    if intent.get("needs_open_llm") and not llm_available():
+        limit_lines.insert(
+            0,
+            "Свободная формулировка вне данных исследования требует подключения языковой модели; "
+            "ниже — только то, что можно сказать по правилам и базе CASTDEV09.26.",
         )
 
-        if intent["kind"] == "focused":
-            sections.append("")
-            sections.append(
-                "Фокус: "
-                + ", ".join(
-                    f"{labels_ru.QUESTION_TITLES[q]} ({labels_ru.QUESTION_PROMPTS_SHORT[q]})"
-                    for q in intent["questions"]
+    if intent["kind"] in ("overview", "quantitative", "focused"):
+        from . import cabinet as cabinet_mod
+
+        themes = cabinet_mod.theme_summaries(conn, dataset)
+        p7 = stats.period_count(conn, dataset, days=7)
+        count_lines.append(
+            f"За 7 дней: {p7['numerator']} из {p7['denominator']} — {p7['percentage']}%."
+        )
+        facts.append(
+            {
+                "label": "за 7 дней",
+                **{k: p7[k] for k in ("numerator", "denominator", "percentage", "display")},
+            }
+        )
+
+        focus_qs = intent["questions"] if intent["kind"] == "focused" else ["q1", "q2", "q3", "q4"]
+        top_bits = []
+        for qn in focus_qs:
+            block = themes.get(qn) or {}
+            for th in (block.get("themes") or [])[:3]:
+                line = (
+                    f"{block.get('title', qn)} — «{th['label']}»: "
+                    f"{th['count']} из {total} — {th['share']['percentage']}%"
                 )
+                seen_lines.append(line)
+                top_bits.append(th["label"])
+                facts.append(
+                    {
+                        "label": th["label"],
+                        "numerator": th["share"]["numerator"],
+                        "denominator": th["share"]["denominator"],
+                        "percentage": th["share"]["percentage"],
+                        "display": th["display"],
+                    }
+                )
+                for src in th["sources"][:2]:
+                    quotes.append(
+                        {
+                            "response_id": src["response_id"],
+                            "question": qn,
+                            "quote": (src["text"] or "")[:400],
+                        }
+                    )
+        if intent["kind"] == "focused":
+            short = (
+                f"По выбранным вопросам ({', '.join(labels_ru.QUESTION_TITLES[q] for q in focus_qs)}) "
+                f"в {total} анкетах выделяются темы: "
+                + (", ".join(top_bits[:5]) if top_bits else "пока без устойчивых признаков")
                 + "."
             )
-            matrix = sm["feature_matrix"]
-            for qn in intent["questions"]:
-                block = matrix.get(qn)
-                if not block:
-                    continue
-                sections.append("")
-                sections.append(
-                    f"Смысловые признаки — {block['title']} "
-                    f"({block['prompt']}):"
-                )
-                shown = 0
-                for col in block["columns"]:
-                    if col["numerator"] <= 0:
-                        continue
-                    sections.append(_fact_line(col["title"], col))
-                    facts.append(
-                        {
-                            "label": col["label_ru"],
-                            "numerator": col["numerator"],
-                            "denominator": col["denominator"],
-                            "percentage": col["percentage"],
-                            "display": col["display"],
-                        }
-                    )
-                    shown += 1
-                if shown == 0:
-                    sections.append("• Пока ни один признак не сработал на этой выборке.")
         else:
-            top = sm["features"]["features"][:8]
-            if top:
-                sections.append("")
-                sections.append(
-                    "Ведущие смысловые категории (не простой подсчёт слов):"
-                )
-                for f in top:
-                    label = labels_ru.feature_value_ru(f["feature_key"], f["feature_value"])
-                    sections.append(_fact_line(label, f))
-                    facts.append(
-                        {
-                            "label": label,
-                            "numerator": f["numerator"],
-                            "denominator": f["denominator"],
-                            "percentage": f["percentage"],
-                            "display": f["display"],
-                        }
-                    )
-            observations.append(
-                "Категории строятся по semantic_rules_v1: позиция вокруг канала "
-                "(позитив / негатив / отказ / нейтрально), критерии решения, "
-                "точки трения, намерение изменить или сохранить подход."
+            short = (
+                f"В наборе {total} анкет. Ниже — наиболее частые смысловые темы по вопросам 1–4 "
+                "и доли (N из D)."
             )
+        assume_lines.append(
+            "Частые темы отражают повторяющиеся формулировки в этой выборке, "
+            "а не «мнение рынка»."
+        )
+        observations.append(
+            "Категории — semantic_rules_v1: позиция к каналу, критерии, трение, намерение."
+        )
 
     if intent["kind"] == "channel_stance" or intent.get("channel"):
         ch = intent.get("channel") or "hh"
         ch_ru = labels_ru.CHANNEL_LABELS.get(ch, ch)
         opp = stats.opposing_stances(conn, ch, dataset)
-        sections.append("")
-        sections.append(
-            f"Факты: отношение к каналу «{ch_ru}» "
-            "(смысловая позиция, а не просто упоминание слова):"
+        seen_lines.append(
+            f"Отношение к «{ch_ru}» разделено по смыслу (не по простому упоминанию слова)."
         )
         for stance in (
             "positive_use",
@@ -283,7 +305,9 @@ def answer(conn, question: str, *, dataset: Dataset = "production") -> dict[str,
         ):
             block = opp[stance]
             label = labels_ru.stance_ru(stance)
-            sections.append(_fact_line(label, block))
+            count_lines.append(
+                f"{label}: {block['numerator']} из {block['denominator']} — {block['percentage']}%."
+            )
             facts.append(
                 {
                     "label": f"{ch_ru}: {label}",
@@ -293,92 +317,119 @@ def answer(conn, question: str, *, dataset: Dataset = "production") -> dict[str,
                     },
                 }
             )
-        observations.append(opp["note"])
-        observations.append(
-            "Разные формулировки вроде «использую и получаю результат», "
-            "«использую, но бесполезно» и «больше не использую» попадают "
-            "в разные доли, даже если канал один и тот же."
+        short = (
+            f"К каналу «{ch_ru}» в выборке есть и позитивные, и негативные, и отказные позиции — "
+            "их нельзя смешивать в одну «упоминаемость»."
         )
+        assume_lines.append(
+            "Если негатив и отказ заметны, канал может сохраняться «формально», "
+            "но не восприниматься как рабочий — это гипотеза, не факт опроса."
+        )
+        observations.append(opp["note"])
         for r in responses:
             t = r["q1"]
             if ch == "hh" and re.search(r"hh|хх|head", t, re.I):
                 quotes.append(
-                    {
-                        "response_id": r["response_id"],
-                        "question": "q1",
-                        "quote": t[:400],
-                    }
+                    {"response_id": r["response_id"], "question": "q1", "quote": t[:400]}
                 )
-            elif ch != "hh":
-                # soft match via channel forms in q1
-                if ch_ru.lower() in t.lower() or ch in t.lower():
-                    quotes.append(
-                        {
-                            "response_id": r["response_id"],
-                            "question": "q1",
-                            "quote": t[:400],
-                        }
-                    )
+            elif ch != "hh" and (ch_ru.lower() in t.lower() or ch in t.lower()):
+                quotes.append(
+                    {"response_id": r["response_id"], "question": "q1", "quote": t[:400]}
+                )
             if len(quotes) >= 6:
                 break
 
     if intent["kind"] == "trend" or intent["want_trend"]:
         dyn = stats.inflow_dynamics(conn, dataset)
-        sections.append("")
-        sections.append("Факты: динамика поступления по дням (UTC-дата записи):")
+        short = f"Поступления шли в {len(dyn)} календарных днях (по дате записи)."
         for d in dyn[-14:]:
-            sections.append(f"• {d['date']}: {d['count']} анкет")
+            seen_lines.append(f"{d['date']}: {d['count']} анкет")
         facts.append(
             {"label": "дней с поступлениями", **stats.pct(len(dyn), len(dyn) or 1)}
         )
-        if len(dyn) >= 2:
-            observations.append(
-                f"За период наблюдений поступления шли в {len(dyn)} календарных днях; "
-                "это поток заполнений, а не оценка качества ответов."
-            )
+        assume_lines.append(
+            "Динамика — поток заполнений, не оценка качества ответов."
+        )
 
     if intent["kind"] == "contradiction" or intent["want_contradiction"]:
         classes = db.fetch_classifications(conn, dataset)
         contras = [c for c in classes if c["feature_key"] == "contradiction"]
         n = len({c["response_id"] for c in contras})
         block = stats.pct(n, total)
-        sections.append("")
-        sections.append("Факты: межвопросные противоречия (эвристика методики):")
-        sections.append(_fact_line("Есть метка противоречия", block))
-        facts.append({"label": "contradiction", **block})
-        for c in contras[:5]:
-            observations.append(
-                f"Метка «{labels_ru.feature_value_ru(c['feature_key'], c['feature_value'])}» "
-                f"у анкеты {c['response_id'][:8]}…"
-            )
-        observations.append(
-            "Это аналитическая метка методики, а не прямой ответ респондентов."
+        short = (
+            f"Межвопросные противоречия (эвристика): {block['display']}"
         )
+        count_lines.append(f"Анкета с меткой противоречия: {block['display']}")
+        facts.append({"label": "contradiction", **block})
+        seen_lines.append(
+            "Метка ставится методикой (например, позитив к каналу в вопросе 1 и отказ в вопросе 4), "
+            "это не прямой ответ респондента."
+        )
+        for c in contras[:4]:
+            observations.append(
+                labels_ru.feature_value_ru(c["feature_key"], c["feature_value"])
+            )
+        assume_lines.append(
+            "Противоречие может отражать смену подхода со временем или разные акценты в ответах."
+        )
+        limit_lines.append("Метка противоречия — аналитическая, не цитата респондента.")
+
+    if intent["kind"] == "cross" or intent["want_cross"]:
+        from . import cabinet as cabinet_mod
+
+        cross = cabinet_mod.cross_questionnaire(conn, dataset, limit=8)
+        short = (
+            "Ниже — частые сочетания признаков у одних и тех же анонимных анкет (вопросы 1–4 вместе)."
+        )
+        for link in cross["links"][:6]:
+            seen_lines.append(
+                f"«{link['a']['title']}: {link['a']['label']}» вместе с "
+                f"«{link['b']['title']}: {link['b']['label']}» — {link['display']}"
+            )
+            for src in link["sources"][:1]:
+                quotes.append(
+                    {
+                        "response_id": src["response_id"],
+                        "question": "q1",
+                        "quote": (src.get("q1") or "")[:400],
+                    }
+                )
+        assume_lines.append(cross["note"])
 
     if intent["want_quotes"] or intent["kind"] == "focused":
         for qn in intent["questions"]:
             quotes.extend(_citations(responses, qn, limit=3))
 
-    # Deduplicate quotes by (response_id, question)
-    seen = set()
+    # Dedup quotes
+    seen_q = set()
     uniq_quotes = []
     for q in quotes:
         key = (q.get("response_id"), q.get("question"), q.get("quote"))
-        if key in seen:
+        if key in seen_q:
             continue
-        seen.add(key)
+        seen_q.add(key)
         uniq_quotes.append(q)
     quotes = uniq_quotes[:10]
 
-    sections.extend(_quotes_block(quotes))
-    sections.extend(_observations_block(observations))
-    sections.append("")
-    sections.append(
-        "Разделение: строки «Факты» опираются на базу CASTDEV09.26; "
-        "строки «Наблюдения» — интерпретация методики."
-    )
+    quote_lines = []
+    for q in quotes:
+        title = labels_ru.QUESTION_TITLES.get(q["question"], q["question"])
+        quote_lines.append(f"[{title}] «{q['quote']}»")
 
-    answer_text = "\n".join(sections)
+    if not short:
+        short = f"В наборе {total} анкет. Уточните вопрос для более узкого среза."
+
+    if not seen_lines:
+        seen_lines.append(f"В наборе «{ds_label}» {total} анкет CASTDEV09.26.")
+
+    answer_text = _memo(
+        short=short,
+        seen=seen_lines,
+        counts=count_lines,
+        quotes=quote_lines,
+        assume=assume_lines or ["Дополнительных предположений по этому вопросу нет."],
+        limits=limit_lines,
+    )
 
     result = {
         **base,
@@ -387,7 +438,6 @@ def answer(conn, question: str, *, dataset: Dataset = "production") -> dict[str,
         "observations": observations,
         "quotes": quotes,
         "classification_note": classify.explain_not_keyword_only(),
-        # Do not surface LLM/integration junk in admin UI
         "capability_note": None,
     }
 
@@ -397,7 +447,7 @@ def answer(conn, question: str, *, dataset: Dataset = "production") -> dict[str,
             if enriched:
                 result["answer_text"] = enriched
                 result["mode"] = "llm"
-        except Exception as exc:  # noqa: BLE001 — surface honestly
+        except Exception as exc:  # noqa: BLE001
             result["llm_error"] = str(exc)
             result["mode"] = "deterministic_fallback"
 
@@ -405,16 +455,16 @@ def answer(conn, question: str, *, dataset: Dataset = "production") -> dict[str,
 
 
 def _llm_enrich(question: str, structured: dict, sample: list[dict]) -> str | None:
-    """Optional OpenAI-compatible chat. Only called when API key present."""
     payload = {
         "model": config.LLM_MODEL,
         "messages": [
             {
                 "role": "system",
                 "content": (
-                    "Ты аналитик CASTDEV09.26. Пиши связный русский отчёт: "
-                    "контекст, факты с «N из D — %», цитаты RAW, наблюдения отдельно. "
-                    "Не выдумывай. Не упоминай API-ключи, пути к файлам и технические детали."
+                    "Ты аналитик CASTDEV09.26. Пиши аналитическую записку на русском со структурой: "
+                    "Короткий вывод; Что видно в данных; Сколько человек; Характерные ответы; "
+                    "Что можно предположить; Ограничения. "
+                    "Факты с «N из D — %». Не выдавай гипотезу за факт. Не упоминай API, ключи, Cursor."
                 ),
             },
             {
