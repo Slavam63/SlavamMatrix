@@ -268,7 +268,32 @@ def run() -> dict:
 
     # Activate
     act_bad = client.post("/api/admin/activate", json={"token": "wrong"})
-    results.append(check("activate_rejects_bad_token", act_bad.status_code == 403, act_bad.get_json()))
+    results.append(
+        check(
+            "activate_rejects_bad_token",
+            act_bad.status_code == 403 and act_bad.get_json().get("error") == "invalid_token",
+            act_bad.get_json(),
+        )
+    )
+    # Wrong length must not become generic server_error (hmac.compare_digest ValueError on <3.12)
+    act_short = client.post("/api/admin/activate", json={"token": "x"})
+    results.append(
+        check(
+            "activate_rejects_short_token",
+            act_short.status_code == 403
+            and act_short.get_json().get("error") == "invalid_token",
+            act_short.get_json(),
+        )
+    )
+    act_empty = client.post("/api/admin/activate", json={"token": ""})
+    results.append(
+        check(
+            "activate_rejects_empty_token",
+            act_empty.status_code == 403
+            and act_empty.get_json().get("error") == "invalid_token",
+            act_empty.get_json(),
+        )
+    )
     act = client.post(
         "/api/admin/activate",
         json={"token": os.environ["CASTDEV_ADMIN_ACTIVATION_TOKEN"]},
