@@ -145,18 +145,27 @@ h1 {
   white-space: nowrap;
 }
 .col-feat {
-  max-width: 7rem;
+  max-width: 3.2rem;
+  min-width: 2.6rem;
+  width: 3rem;
+  padding: 0.55rem 0.2rem !important;
   white-space: normal;
-  font-size: 0.75rem;
-  line-height: 1.25;
+  font-size: 0.68rem;
+  line-height: 1.15;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-align: left;
+  vertical-align: bottom;
+  height: 8.5rem;
 }
-.col-date { white-space: nowrap; width: 10.5rem; }
-.col-answer { min-width: 14rem; line-height: 1.4; }
 .col-check {
   text-align: center;
   font-size: 1.05rem;
+  min-width: 2.6rem;
 }
 .col-check.hit { background: var(--hit); color: #dff5e4; }
+.col-answer { min-width: 16rem; max-width: 28rem; line-height: 1.4; }
+.col-date { white-space: nowrap; width: 10.5rem; }
 .ans-snip { margin-bottom: 0.45rem; line-height: 1.35; }
 .ans-snip strong { color: var(--muted); font-size: 0.8rem; margin-right: 0.25rem; }
 .tag {
