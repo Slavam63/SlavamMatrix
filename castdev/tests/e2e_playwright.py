@@ -124,13 +124,30 @@ def main():
         save(pa, "desktop-intro-admin-button-visible")
 
         pa.goto(BASE + "/admin", wait_until="networkidle")
-        pa.select_option("#dataset", "test")
+        # With ALLOW_TEST_SUBMIT the toggle may appear; select test if present
+        if pa.locator("#source-wrap:not([hidden])").count():
+            pa.select_option("#dataset", "test")
+            pa.wait_for_timeout(400)
+        pa.wait_for_selector("#cabinet:not([hidden])", timeout=10000)
+        assert pa.locator("#themes .theme-card").count() >= 1
+        assert pa.locator("#resp-body tr").count() >= 1
+        latest_txt = pa.locator("#latest").inner_text()
+        assert "(мск)" in latest_txt or latest_txt == "—"
+        assert "Воопрос" not in pa.content()
+        assert "Массив" not in pa.content()
+        assert "LLM API" not in pa.content()
+        # Filter Q1 — dynamic columns
+        pa.click('#q-filters [data-q="q1"]')
         pa.wait_for_timeout(300)
+        assert pa.locator("#resp-head th").count() >= 3
+        save(pa, "admin-cabinet-themes")
         pa.fill("#question", "Как относятся к HH?")
         pa.click("#ask-form button[type=submit]")
         pa.wait_for_timeout(800)
         thread = pa.locator("#thread").inner_text()
-        assert "из" in thread and ("%" in thread or "positive_use" in thread or "HH" in thread or "hh" in thread.lower())
+        assert "Короткий вывод" in thread and "Ограничения" in thread
+        assert "из" in thread and "%" in thread
+        assert "CASTDEV_LLM_API_KEY" not in thread
         save(pa, "admin-ask-hh-answer")
         out["steps"].append({"admin_answer_excerpt": thread[:400]})
 

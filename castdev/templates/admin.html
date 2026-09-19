@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>CASTDEV09.26 — аналитика</title>
+  <title>CASTDEV09.26 — кабинет аналитика</title>
   <link rel="stylesheet" href="/admin/static/admin.css">
 </head>
 <body>
@@ -12,43 +12,86 @@
     <header class="hdr">
       <div>
         <p class="eyebrow">CASTDEV09.26</p>
-        <h1>Кастдев — аналитик</h1>
+        <h1>Кабинет аналитика</h1>
+        <p class="lead hdr-lead">Исследовательский разбор ответов кастдева</p>
       </div>
       <div class="hdr-actions">
-        <label class="ds">
-          Массив
-          <select id="dataset">
-            <option value="production">production</option>
-            <option value="test">test</option>
+        <label class="ds" id="source-wrap" hidden>
+          Данные
+          <select id="dataset" aria-label="Источник данных">
+            <option value="production">Боевые ответы</option>
+            <option value="test">Тестовые (проверка)</option>
           </select>
         </label>
+        <button type="button" class="btn ghost" id="btn-export">Выгрузить данные</button>
         <button type="button" class="btn ghost" id="btn-logout">Выйти</button>
       </div>
     </header>
-
-    <section class="stats" id="stats" hidden>
-      <p>Получено анкет: <strong id="total">—</strong></p>
-      <p>Последнее поступление: <strong id="latest">—</strong></p>
-    </section>
 
     <section class="gate" id="gate">
       <p>Административный доступ закрыт. Активируйте браузер Татьяны Воробьёвой.</p>
       <p><a href="/admin/activate">Перейти к активации</a></p>
     </section>
 
-    <section class="chat" id="chat" hidden>
-      <div class="thread" id="thread" aria-live="polite"></div>
-      <form id="ask-form" class="ask">
-        <label for="question">Задайте вопрос по результатам CASTDEV09.26</label>
-        <textarea id="question" rows="4" required placeholder="Например: как относятся к HH? какие доли?"></textarea>
-        <div class="ask-actions">
-          <button type="submit" class="btn primary">Спросить Кастдева</button>
-          <button type="button" class="btn ghost" id="btn-new">Новый диалог</button>
-          <button type="button" class="btn ghost" id="btn-snapshot">Скачать snapshot</button>
+    <div id="cabinet" hidden>
+      <!-- 1. СВОДКА -->
+      <section class="block" id="stats">
+        <h2 class="section-title">Сводка</h2>
+        <div class="stats-row">
+          <p>Получено анкет: <strong id="total">—</strong></p>
+          <p>Последний ответ: <strong id="latest">—</strong></p>
         </div>
-      </form>
-      <p class="note" id="capability-note" hidden></p>
-    </section>
+      </section>
+
+      <!-- 2. ТЕМЫ ПО ВОПРОСАМ -->
+      <section class="block" id="themes-block">
+        <h2 class="section-title">Темы по вопросам</h2>
+        <p class="section-lead">Основные содержательные признаки, сколько раз встречаются и доля. Раскройте тему — увидите исходные ответы.</p>
+        <div id="themes" class="themes"></div>
+      </section>
+
+      <!-- 3. ОТВЕТЫ И ПРИЗНАКИ -->
+      <section class="block" id="answers-block">
+        <h2 class="section-title">Ответы и признаки</h2>
+        <p class="section-lead">Каждая строка — ответ респондента. Столбцы признаков строятся из данных (✓ = признак есть). Можно выбрать один вопрос или все.</p>
+        <div class="filters" id="q-filters" role="tablist">
+          <button type="button" class="chip active" data-q="all">Все вопросы</button>
+          <button type="button" class="chip" data-q="q1">Вопрос 1</button>
+          <button type="button" class="chip" data-q="q2">Вопрос 2</button>
+          <button type="button" class="chip" data-q="q3">Вопрос 3</button>
+          <button type="button" class="chip" data-q="q4">Вопрос 4</button>
+        </div>
+        <div class="table-scroll">
+          <table class="resp-table" id="resp-table">
+            <thead id="resp-head"></thead>
+            <tbody id="resp-body"></tbody>
+          </table>
+        </div>
+        <p class="empty-hint" id="resp-empty" hidden>Пока нет анкет.</p>
+      </section>
+
+      <!-- 4. СВЯЗИ -->
+      <section class="block" id="cross-block">
+        <h2 class="section-title">Связи между вопросами</h2>
+        <p class="section-lead" id="cross-note">Единица анализа — целая анонимная анкета (все четыре ответа вместе).</p>
+        <div id="cross-links" class="cross-links"></div>
+      </section>
+
+      <!-- 5. СПРОСИТЬ КАСТДЕВА -->
+      <section class="block chat" id="chat">
+        <h2 class="section-title">Спросить Кастдева</h2>
+        <p class="section-lead">Задайте вопрос по результатам. Ответ — аналитическая записка: вывод, факты с долями, цитаты, предположения и ограничения.</p>
+        <div class="thread" id="thread" aria-live="polite"></div>
+        <form id="ask-form" class="ask">
+          <label for="question">Ваш вопрос</label>
+          <textarea id="question" rows="3" required placeholder="Например: как относятся к HH? какие сочетания признаков часты?"></textarea>
+          <div class="ask-actions">
+            <button type="submit" class="btn primary">Спросить Кастдева</button>
+            <button type="button" class="btn ghost" id="btn-new">Новый диалог</button>
+          </div>
+        </form>
+      </section>
+    </div>
   </div>
   <script src="/admin/static/admin.js" defer></script>
 </body>

@@ -5,9 +5,32 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from . import db
+from . import db, labels_ru
 from .db import Dataset
+
+MSK = ZoneInfo("Europe/Moscow")
+
+
+def format_msk(iso_ts: str | None) -> str | None:
+    """Format stored UTC/ISO timestamp as «DD.MM.YYYY в HH:MM (мск)»."""
+    if not iso_ts:
+        return None
+    raw = iso_ts.strip()
+    if not raw:
+        return None
+    try:
+        if raw.endswith("Z"):
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        else:
+            dt = datetime.fromisoformat(raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        local = dt.astimezone(MSK)
+        return local.strftime("%d.%m.%Y в %H:%M (мск)")
+    except ValueError:
+        return iso_ts
 
 
 def pct(numerator: int, denominator: int) -> dict[str, Any]:
@@ -151,12 +174,100 @@ def opposing_stances(
     return out
 
 
+def feature_matrix(conn, dataset: Dataset = "production") -> dict[str, Any]:
+    """Per-question semantic feature columns with N из D for admin table."""
+    total = total_count(conn, dataset)
+    classes = db.fetch_classifications(conn, dataset)
+    buckets: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+    for c in classes:
+        buckets[(c["question"], c["feature_key"], c["feature_value"])].add(
+            c["response_id"]
+        )
+
+    out: dict[str, Any] = {}
+    for qn, columns in labels_ru.FEATURE_COLUMNS_BY_QUESTION.items():
+        col_rows = []
+        for fkey, fval, title in columns:
+            ids = buckets.get((qn, fkey, fval), set())
+            # Also accept same key/value stored under another question code if needed
+            if not ids and qn.startswith("q"):
+                for (qq, kk, vv), s in buckets.items():
+                    if kk == fkey and vv == fval and qq == qn:
+                        ids = s
+                        break
+            col_rows.append(
+                {
+                    "feature_key": fkey,
+                    "feature_value": fval,
+                    "title": title,
+                    "label_ru": labels_ru.feature_value_ru(fkey, fval),
+                    **pct(len(ids), total),
+                }
+            )
+        out[qn] = {
+            "question": qn,
+            "title": labels_ru.QUESTION_TITLES[qn],
+            "prompt": labels_ru.QUESTION_PROMPTS_SHORT[qn],
+            "columns": col_rows,
+        }
+    return out
+
+
+def responses_overview(conn, dataset: Dataset = "production") -> list[dict[str, Any]]:
+    """One row per response: MSK time, feature tags by question, RAW answers."""
+    responses = db.fetch_all_responses(conn, dataset)
+    classes = db.fetch_classifications(conn, dataset)
+    by_rid: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for c in classes:
+        by_rid[c["response_id"]].append(c)
+
+    rows: list[dict[str, Any]] = []
+    for r in responses:
+        feats = by_rid.get(r["response_id"], [])
+        by_q: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        tags: list[str] = []
+        for f in feats:
+            item = {
+                "question": f["question"],
+                "feature_key": f["feature_key"],
+                "feature_value": f["feature_value"],
+                "label_ru": labels_ru.feature_value_ru(
+                    f["feature_key"], f["feature_value"]
+                ),
+            }
+            by_q[f["question"]].append(item)
+            if f["question"] in ("q1", "q2", "q3", "q4", "cross"):
+                tags.append(item["label_ru"])
+        rows.append(
+            {
+                "response_id": r["response_id"],
+                "created_at": r["created_at"],
+                "created_at_display": format_msk(r["created_at"]),
+                "q1": r["q1"],
+                "q2": r["q2"],
+                "q3": r["q3"],
+                "q4": r["q4"],
+                "features_by_question": {k: by_q[k] for k in sorted(by_q)},
+                "feature_tags": tags,
+            }
+        )
+    # Newest first for admin scan
+    rows.sort(key=lambda x: x["created_at"] or "", reverse=True)
+    return rows
+
+
 def summary(conn, dataset: Dataset = "production") -> dict[str, Any]:
+    latest = db.latest_created_at(conn, dataset)
     return {
         "total": total_count(conn, dataset),
-        "latest": db.latest_created_at(conn, dataset),
+        "latest": latest,
+        "latest_display": format_msk(latest),
+        "dataset_label": labels_ru.DATASET_LABELS.get(dataset, dataset),
         "period_7d": period_count(conn, dataset, days=7),
         "dynamics": inflow_dynamics(conn, dataset),
         "features": feature_stats(conn, dataset),
         "hh_stances": opposing_stances(conn, "hh", dataset),
+        "feature_matrix": feature_matrix(conn, dataset),
+        "responses": responses_overview(conn, dataset),
+        "question_titles": dict(labels_ru.QUESTION_TITLES),
     }
