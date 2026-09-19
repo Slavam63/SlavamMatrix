@@ -69,6 +69,18 @@ CREATE TABLE IF NOT EXISTS meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- Minimal Analyst API audit (no token, no full raw answers, no question text).
+CREATE TABLE IF NOT EXISTS analyst_audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at TEXT NOT NULL,
+  op_type TEXT NOT NULL,
+  endpoint TEXT NOT NULL,
+  success INTEGER NOT NULL,
+  note TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_analyst_audit_created ON analyst_audit_log(created_at);
 """
 
 
@@ -248,6 +260,58 @@ def fetch_all_responses(
     return [dict(r) for r in rows]
 
 
+def fetch_responses_page(
+    conn: sqlite3.Connection,
+    dataset: Dataset = "production",
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    since: str | None = None,
+    until: str | None = None,
+    ids: list[str] | None = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """Anonymous RAW page: survey_id (=response_id), q1–q4, submitted_at. No PII."""
+    clauses = ["dataset = ?"]
+    params: list[Any] = [dataset]
+    if since:
+        clauses.append("created_at >= ?")
+        params.append(since)
+    if until:
+        clauses.append("created_at <= ?")
+        params.append(until)
+    if ids:
+        placeholders = ",".join("?" for _ in ids)
+        clauses.append(f"response_id IN ({placeholders})")
+        params.extend(ids)
+    where = " AND ".join(clauses)
+    total_row = conn.execute(
+        f"SELECT COUNT(*) AS n FROM responses WHERE {where}", params
+    ).fetchone()
+    total = int(total_row["n"])
+    rows = conn.execute(
+        f"""
+        SELECT response_id, created_at, q1, q2, q3, q4
+        FROM responses WHERE {where}
+        ORDER BY created_at ASC
+        LIMIT ? OFFSET ?
+        """,
+        [*params, limit, offset],
+    ).fetchall()
+    items = [
+        {
+            "survey_id": r["response_id"],
+            "response_id": r["response_id"],
+            "submitted_at": r["created_at"],
+            "q1": r["q1"],
+            "q2": r["q2"],
+            "q3": r["q3"],
+            "q4": r["q4"],
+        }
+        for r in rows
+    ]
+    return items, total
+
+
 def fetch_classifications(
     conn: sqlite3.Connection, dataset: Dataset = "production"
 ) -> list[dict[str, Any]]:
@@ -262,6 +326,100 @@ def fetch_classifications(
         (dataset,),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def fetch_classifications_filtered(
+    conn: sqlite3.Connection,
+    dataset: Dataset = "production",
+    *,
+    response_id: str | None = None,
+    question: str | None = None,
+    feature_key: str | None = None,
+    feature_value: str | None = None,
+) -> list[dict[str, Any]]:
+    clauses = ["r.dataset = ?"]
+    params: list[Any] = [dataset]
+    if response_id:
+        clauses.append("c.response_id = ?")
+        params.append(response_id)
+    if question:
+        clauses.append("c.question = ?")
+        params.append(question)
+    if feature_key:
+        clauses.append("c.feature_key = ?")
+        params.append(feature_key)
+    if feature_value:
+        clauses.append("c.feature_value = ?")
+        params.append(feature_value)
+    where = " AND ".join(clauses)
+    rows = conn.execute(
+        f"""
+        SELECT c.response_id, c.question, c.feature_key, c.feature_value,
+               c.confidence, c.method
+        FROM classifications c
+        JOIN responses r ON r.response_id = c.response_id
+        WHERE {where}
+        ORDER BY c.response_id, c.question, c.feature_key, c.feature_value
+        """,
+        params,
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def derived_status(conn: sqlite3.Connection, dataset: Dataset = "production") -> dict[str, Any]:
+    """Presence of derived layer + method; last classify inferred from latest response."""
+    n_class = conn.execute(
+        """
+        SELECT COUNT(*) AS n FROM classifications c
+        JOIN responses r ON r.response_id = c.response_id
+        WHERE r.dataset = ?
+        """,
+        (dataset,),
+    ).fetchone()
+    method_row = conn.execute(
+        """
+        SELECT c.method FROM classifications c
+        JOIN responses r ON r.response_id = c.response_id
+        WHERE r.dataset = ?
+        LIMIT 1
+        """,
+        (dataset,),
+    ).fetchone()
+    last = latest_created_at(conn, dataset)
+    return {
+        "derived_present": int(n_class["n"]) > 0,
+        "classification_count": int(n_class["n"]),
+        "method": method_row["method"] if method_row else None,
+        "last_recompute": last,  # classifications written at submit; no separate recompute yet
+    }
+
+
+def meta_get(conn: sqlite3.Connection, key: str) -> str | None:
+    row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def log_analyst_audit(
+    conn: sqlite3.Connection,
+    *,
+    op_type: str,
+    endpoint: str,
+    success: bool,
+    note: str | None = None,
+) -> None:
+    """Minimal audit — never store token or full answer text."""
+    safe_note = (note or "")[:120]
+    try:
+        conn.execute(
+            """
+            INSERT INTO analyst_audit_log(created_at, op_type, endpoint, success, note)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (_utc_now(), op_type[:64], endpoint[:256], 1 if success else 0, safe_note or None),
+        )
+    except Exception:
+        # Audit must not break API
+        pass
 
 
 def wipe_test_dataset(conn: sqlite3.Connection) -> int:

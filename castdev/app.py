@@ -19,7 +19,7 @@ from flask import (
     render_template,
 )
 
-from . import analyst, cabinet, classify, config, db, stats, validate
+from . import analyst, analyst_api, cabinet, classify, config, db, stats, validate
 from .db import Dataset
 
 # In-memory flood buckets — NOT written to research DB (no IP profiling in research).
@@ -45,6 +45,8 @@ def create_app() -> Flask:
         resp.headers["X-Frame-Options"] = "DENY"
         resp.headers["Referrer-Policy"] = "no-referrer"
         resp.headers["Permissions-Policy"] = "interest-cohort=()"
+        # Never advertise CORS * (ChatGPT Actions call server-side with Bearer).
+        resp.headers.pop("Access-Control-Allow-Origin", None)
         # CSP: same-origin API allowed; no third-party scripts
         if not request.path.startswith("/api/"):
             resp.headers["Content-Security-Policy"] = (
@@ -143,7 +145,12 @@ def create_app() -> Flask:
 
     @app.get("/api/castdev/health")
     def health():
-        return jsonify({"ok": True, "service": "castdev0926", "version": "0.9.0"})
+        from . import __version__
+
+        return jsonify({"ok": True, "service": "castdev0926", "version": __version__})
+
+    # ----- Analyst API (ChatGPT / Ёжик) — Bearer token, read-only -----
+    analyst_api.register_analyst_routes(app, _flood_buckets)
 
     # ----- Admin session helpers -----
     def _admin_conn():

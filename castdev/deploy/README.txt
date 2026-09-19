@@ -30,6 +30,33 @@ EnvironmentFile=/etc/castdev0926.env should already set:
   CASTDEV_ADMIN_ACTIVATION_TOKEN=<kept by Vyacheslav>
   CASTDEV_ADMIN_SESSION_SECRET=<existing>
 
+=== ANALYST API TOKEN (Op11 — ChatGPT / Ёжик) ===
+Server-only secret. Never put in git, HTML, JS, reports, screenshots, or query strings.
+
+Generate once on myserver (prints token ONLY on your terminal — save to password manager):
+
+  TOKEN=$(openssl rand -hex 32)
+  echo "CASTDEV_ANALYST_API_TOKEN=$TOKEN" | sudo tee -a /etc/castdev0926.env
+  sudo chmod 600 /etc/castdev0926.env
+  sudo systemctl restart castdev0926.service
+  # Smoke (use the same $TOKEN from your shell history — do not paste into tickets):
+  curl -sS -H "Authorization: Bearer $TOKEN" \
+    http://127.0.0.1:8092/api/analyst/v1/status
+  curl -sS https://castdev0926.labinfluences.su/api/analyst/v1/openapi.json | head -c 200
+
+OpenAPI (public schema, no secrets):
+  https://castdev0926.labinfluences.su/api/analyst/v1/openapi.json
+Repo copy: castdev/openapi/analyst_v1.json
+Rules: castdev/docs/analyst_rules_ru.txt
+
+nginx: existing /api/ proxy already covers /api/analyst/ — no new location needed.
+
+ChatGPT Custom GPT Actions (ONE step after token exists on server):
+  Create Custom GPT → Actions → Import from URL
+  https://castdev0926.labinfluences.su/api/analyst/v1/openapi.json
+  → Authentication: API Key → Auth Type: Bearer → paste CASTDEV_ANALYST_API_TOKEN
+  (Schema URL is public by design; data endpoints require Bearer.)
+
 === WIPE ACCEPTANCE TEST ROWS ===
 Test submissions are marked with literal marker [TEST-ACCEPTANCE-WIPE] in q1–q4.
 Dry-run then apply:

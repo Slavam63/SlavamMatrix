@@ -18,7 +18,9 @@ os.environ["CASTDEV_DATA_DIR"] = str(ROOT / "data")
 os.environ["CASTDEV_ADMIN_ACTIVATION_TOKEN"] = "test-activation-token-op9"
 os.environ["CASTDEV_ADMIN_SESSION_SECRET"] = "test-session-secret-op9"
 os.environ["CASTDEV_ALLOW_TEST_SUBMIT"] = "1"
-# Force fresh paths under temp for isolation of some tests — use project data for integration
+os.environ.setdefault(
+    "CASTDEV_ANALYST_API_TOKEN", "test-analyst-token-op11-selftest-only"
+)
 
 from castdev import classify, config, db, stats, analyst  # noqa: E402
 from castdev.seed_test import seed_test, TEST_RESPONSES  # noqa: E402
@@ -514,6 +516,49 @@ def run() -> dict:
         check(
             "admin_entry_hidden_by_default",
             'id="admin-entry" hidden' in html or 'id="admin-entry"\n        hidden' in html or 'admin-entry" hidden' in html,
+        )
+    )
+
+    # --- Op11 Analyst API smoke (full matrix in test_analyst_api.py) ---
+    analyst_token = os.environ.get("CASTDEV_ANALYST_API_TOKEN") or ""
+    oa = client.get("/api/analyst/v1/openapi.json")
+    results.append(
+        check(
+            "analyst_openapi_public",
+            oa.status_code == 200
+            and (oa.get_json() or {}).get("openapi", "").startswith("3."),
+            oa.status_code,
+        )
+    )
+    no_a = client.get("/api/analyst/v1/status?dataset=test")
+    results.append(check("analyst_no_auth_401", no_a.status_code == 401))
+    ok_a = client.get(
+        "/api/analyst/v1/status?dataset=test",
+        headers={"Authorization": f"Bearer {analyst_token}"},
+    )
+    okj = ok_a.get_json() or {}
+    with db.session("test") as _ac:
+        test_n_now = db.count_responses(_ac, "test")
+    results.append(
+        check(
+            "analyst_bearer_status",
+            ok_a.status_code == 200
+            and okj.get("ok")
+            and okj.get("count") == test_n_now
+            and okj.get("count") >= TEST_N
+            and analyst_token not in (ok_a.get_data(as_text=True) or ""),
+            {"count": okj.get("count"), "db": test_n_now},
+        )
+    )
+    agg_a = client.get(
+        "/api/analyst/v1/aggregates?dataset=test",
+        headers={"Authorization": f"Bearer {analyst_token}"},
+    )
+    results.append(
+        check(
+            "analyst_aggregates",
+            agg_a.status_code == 200 and (agg_a.get_json() or {}).get("cross") is not None,
+            agg_a.status_code,
         )
     )
 
