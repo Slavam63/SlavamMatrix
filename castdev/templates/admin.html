@@ -16,10 +16,10 @@
       </div>
       <div class="hdr-actions">
         <label class="ds">
-          Массив
-          <select id="dataset">
-            <option value="production">production</option>
-            <option value="test">test</option>
+          Источник данных
+          <select id="dataset" aria-label="Источник данных">
+            <option value="production">Боевые ответы</option>
+            <option value="test">Тестовые</option>
           </select>
         </label>
         <button type="button" class="btn ghost" id="btn-logout">Выйти</button>
@@ -36,6 +36,28 @@
       <p><a href="/admin/activate">Перейти к активации</a></p>
     </section>
 
+    <section class="tables" id="tables" hidden>
+      <h2 class="section-title">Смысловые признаки по вопросам</h2>
+      <p class="section-lead">Столбцы — аналитические признаки (негатив / позитив / отказ и др.). Доли: N из D.</p>
+      <div id="feature-matrix" class="feature-matrix"></div>
+
+      <h2 class="section-title">Ответы респондентов</h2>
+      <p class="section-lead">Каждая строка — анкета. Признаки сверху, RAW-ответы — по кнопке «Показать ответы».</p>
+      <div class="table-scroll">
+        <table class="resp-table" id="resp-table">
+          <thead>
+            <tr>
+              <th>Дата (MSK)</th>
+              <th>Признаки</th>
+              <th>RAW</th>
+            </tr>
+          </thead>
+          <tbody id="resp-body"></tbody>
+        </table>
+      </div>
+      <p class="empty-hint" id="resp-empty" hidden>В этом источнике пока нет анкет.</p>
+    </section>
+
     <section class="chat" id="chat" hidden>
       <div class="thread" id="thread" aria-live="polite"></div>
       <form id="ask-form" class="ask">
@@ -44,10 +66,9 @@
         <div class="ask-actions">
           <button type="submit" class="btn primary">Спросить Кастдева</button>
           <button type="button" class="btn ghost" id="btn-new">Новый диалог</button>
-          <button type="button" class="btn ghost" id="btn-snapshot">Скачать snapshot</button>
+          <button type="button" class="btn ghost" id="btn-snapshot">Скачать выгрузку</button>
         </div>
       </form>
-      <p class="note" id="capability-note" hidden></p>
     </section>
   </div>
   <script src="/admin/static/admin.js" defer></script>

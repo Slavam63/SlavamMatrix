@@ -153,6 +153,41 @@ def run() -> dict:
         pc = stats.period_count(conn, "test", days=30)
         results.append(check("period_count_30d", pc["count"] == 10, str(pc)))
 
+        # MSK display
+        latest = db.latest_created_at(conn, "test")
+        latest_disp = stats.format_msk(latest)
+        results.append(
+            check(
+                "format_msk_shape",
+                bool(latest_disp)
+                and " в " in latest_disp
+                and "(MSK)" in latest_disp
+                and "T" not in latest_disp,
+                str(latest_disp),
+            )
+        )
+        sm = stats.summary(conn, "test")
+        results.append(
+            check(
+                "summary_has_matrix_and_responses",
+                isinstance(sm.get("feature_matrix"), dict)
+                and "q1" in sm["feature_matrix"]
+                and isinstance(sm.get("responses"), list)
+                and len(sm["responses"]) == 10
+                and sm.get("latest_display")
+                and sm.get("dataset_label") == "Тестовые",
+                f"matrix_keys={list((sm.get('feature_matrix') or {}).keys())} n={len(sm.get('responses') or [])}",
+            )
+        )
+        q2_title = (sm.get("question_titles") or {}).get("q2", "")
+        results.append(
+            check(
+                "no_voopros_typo",
+                "Воопрос" not in q2_title and q2_title == "Вопрос 2",
+                q2_title,
+            )
+        )
+
         # Analyst QA types
         for q, kind_hint in [
             ("Сколько всего анкет?", "quantitative"),
@@ -163,30 +198,56 @@ def run() -> dict:
             ("Сколько респондентов с Марса?", "insufficient"),
         ]:
             ans = analyst.answer(conn, q, dataset="test")
+            text = ans.get("answer_text") or ""
             results.append(
                 check(
                     f"analyst_{kind_hint}",
                     ans.get("ok") and ans.get("total_responses") == 10,
-                    (ans.get("answer_text") or "")[:120],
+                    text[:120],
+                )
+            )
+            results.append(
+                check(
+                    f"analyst_{kind_hint}_narrative",
+                    "Контекст" in text
+                    and ("Факт" in text or "факт" in text.lower() or "недостаточно" in text.lower()),
+                    text[:220],
+                )
+            )
+            results.append(
+                check(
+                    f"analyst_{kind_hint}_no_llm_junk",
+                    "CASTDEV_LLM_API_KEY" not in text
+                    and "_llm_enrich" not in text
+                    and "/api/admin/snapshot" not in text
+                    and not ans.get("capability_note"),
+                    str(ans.get("capability_note")),
                 )
             )
             if kind_hint == "insufficient":
                 results.append(
                     check(
                         "analyst_insufficient_honest",
-                        "недостаточно" in (ans.get("answer_text") or "").lower()
-                        or "нет данных" in (ans.get("answer_text") or "").lower(),
-                        ans.get("answer_text", "")[:160],
+                        "недостаточно" in text.lower()
+                        or "нет данных" in text.lower(),
+                        text[:160],
                     )
                 )
             if kind_hint == "channel":
-                # Must mention different stances / numerator
-                text = ans.get("answer_text") or ""
                 results.append(
                     check(
                         "analyst_hh_has_denom",
                         "из" in text and "%" in text,
                         text[:200],
+                    )
+                )
+                results.append(
+                    check(
+                        "analyst_hh_russian_stances",
+                        "позитив" in text.lower()
+                        or "негатив" in text.lower()
+                        or "отказал" in text.lower(),
+                        text[:240],
                     )
                 )
             quotes = ans.get("quotes") or []
@@ -359,6 +420,41 @@ def run() -> dict:
     # Public pages
     results.append(check("index_html", client.get("/").status_code == 200))
     results.append(check("admin_page", client.get("/admin").status_code == 200))
+    admin_html = client.get("/admin").get_data(as_text=True)
+    results.append(
+        check(
+            "admin_ui_russian_dataset",
+            "Боевые ответы" in admin_html
+            and "Тестовые" in admin_html
+            and "Массив" not in admin_html
+            and "Источник данных" in admin_html,
+            "dataset labels",
+        )
+    )
+    results.append(
+        check(
+            "admin_ui_no_voopros",
+            "Воопрос" not in admin_html,
+            "typo check",
+        )
+    )
+    results.append(
+        check(
+            "admin_ui_has_tables",
+            "feature-matrix" in admin_html
+            and "resp-table" in admin_html
+            and "Смысловые признаки" in admin_html,
+            "tables markup",
+        )
+    )
+    results.append(
+        check(
+            "admin_ui_no_capability_note_slot",
+            "capability-note" not in admin_html
+            and "_llm_enrich" not in admin_html,
+            "junk removed from template",
+        )
+    )
     html = client.get("/").get_data(as_text=True)
     results.append(
         check(
