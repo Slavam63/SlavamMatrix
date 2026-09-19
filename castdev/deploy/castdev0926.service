@@ -1,0 +1,20 @@
+[Unit]
+Description=CASTDEV09.26 Flask/gunicorn backend
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/castdev0926
+EnvironmentFile=/etc/castdev0926.env
+Environment=CASTDEV_DATA_DIR=/var/lib/castdev0926
+Environment=CASTDEV_HOST=127.0.0.1
+Environment=CASTDEV_PORT=8092
+Environment=CASTDEV_DEBUG=0
+ExecStart=/opt/castdev0926/.venv/bin/gunicorn -b 127.0.0.1:8092 -w 2 --timeout 60 --access-logfile - --error-logfile - castdev.wsgi:app
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

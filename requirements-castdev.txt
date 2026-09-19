@@ -1,2 +1,3 @@
 # CASTDEV09.26 (Operation 9)
 flask>=3.0,<4
+gunicorn>=22.0,<28
